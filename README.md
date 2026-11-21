@@ -19,10 +19,21 @@ Open `index.html` in a browser. There is no server and no network access; the pa
 ## Extend it
 
 1. Edit `taxonomy.json` (add or tune a rule, trigger, mitigator or QC check).
-2. `node build.js` regenerates `index.html` from `index.template.html`, `engine.js`, `taxonomy.json` and `sample-contract.txt`.
+2. `node build.js` regenerates `index.html` from `index.template.html`, `engine.js`, `taxonomy.json`, `sample-contract.txt` and the `vendor/` files (`pdf-extract.js`, pdf.js).
 3. `node test.js` runs the tests, including per-regex timing limits (every pattern must stay under 200 ms on 200k characters of pathological input). Add a positive and a benign test for each change.
 
 Never edit `index.html` directly; it is generated.
+
+## PDF import
+
+Choose or drop a `.pdf` file and its text is extracted in your browser, then goes through the same path as pasted text (200,000-character limit, 100-character minimum).
+
+- **Supported:** PDFs with selectable text, up to 15 MB (2 MB for .txt, .md and .docx). Pages are read in reading order (lines rebuilt from text positions, paragraph breaks kept, words hyphenated across a line break rejoined). Only the first 300 pages are read; a notice says so when a PDF is longer. Layout, tables and images are not kept.
+- **Not supported:** scanned or image-only PDFs. OCR is not built in, so these show "This PDF looks scanned (images, no text)..." and nothing is loaded; paste the text or use a text version. Password-protected PDFs ask you to remove the password first. A file named `.pdf` that is not a PDF, or a damaged PDF, shows a friendly error and never replaces the text already in the box.
+- **How it works:** [pdf.js](https://github.com/mozilla/pdf.js) (Mozilla, Apache License 2.0; copy in `vendor/LICENSE`, files `vendor/pdf.min.mjs` and `vendor/pdf.worker.min.mjs`, version 6.2.108) is embedded in `index.html` as inert base64 text and only decoded into Blob URLs when you pick a PDF. Nothing is fetched: no external fonts or character maps are used, so text in PDFs that need them (some non-embedded CJK fonts) may come out degraded. The PDF is read once and the pdf.js document and worker are destroyed afterwards. The extraction logic is `vendor/pdf-extract.js` (ours, not pdf.js).
+- **CSP change:** `script-src` is now `'unsafe-inline' blob:` (it was `'unsafe-inline'`) so the page can load its embedded pdf.js from a Blob URL. Nothing else changed: `default-src 'none'`, `connect-src 'none'` and `worker-src blob:` are as before, no remote host is allowed, and neither `'unsafe-eval'` nor `'wasm-unsafe-eval'` is needed.
+- **Size:** embedding pdf.js makes `index.html` about 2.4 MB.
+- **Tests:** `node test.js` runs the extraction function on the PDFs in `fixtures/` with pdf.js's legacy build in Node (regenerate fixtures with `node fixtures/make-fixtures.js`, which needs pdf-lib and qpdf). `node fixtures/chrome-check.js` drives headless Chrome through the real upload flow (needs playwright-core).
 
 ## Known limitations
 
@@ -33,8 +44,8 @@ Never edit `index.html` directly; it is generated.
 
 ## Privacy
 
-Everything runs in your browser. Contract text is never uploaded, stored or sent anywhere (the page's Content-Security-Policy blocks network connections).
+Everything runs in your browser. Contract text is never uploaded, stored or sent anywhere (the page's Content-Security-Policy blocks network connections). PDF import runs pdf.js locally from the embedded copy.
 
 ## Security notes
 
-The CSP keeps `'unsafe-inline'` for scripts and styles because the page is a single self-contained file. Switching to hash-based script and style allow-listing is a possible future hardening.
+The CSP keeps `'unsafe-inline'` for scripts and styles because the page is a single self-contained file, and allows `blob:` scripts only so the embedded pdf.js can load. Switching to hash-based script and style allow-listing is a possible future hardening.

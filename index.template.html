@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Red Flag &amp; Risk Detector</title>
 <style>
 :root{
@@ -340,9 +340,11 @@ body[data-mode=zero] #zeroMsg{display:block}
           <textarea id="src" rows="12" spellcheck="false" aria-describedby="srcMeta srcHint"></textarea>
           <div class="meta-row"><span id="srcMeta" class="num"></span><span id="srcHint"></span></div>
           <div class="drop" id="drop">
-            <span id="dropLabel">Drop a .txt, .md or .docx file here, or choose a file.</span>
-            <div><button type="button" class="btn" id="btnChoose">Choose file</button> <input type="file" id="file" accept=".txt,.md,.markdown,.docx" hidden></div>
+            <span id="dropLabel">Drop a .txt, .md, .docx or .pdf file here, or choose a file.</span>
+            <p class="fine" id="dropHint" style="margin:0">PDF text is supported. Scanned PDFs (pictures of pages) are not, because OCR is not built in.</p>
+            <div><button type="button" class="btn" id="btnChoose">Choose file</button> <input type="file" id="file" accept=".txt,.md,.markdown,.docx,.pdf,application/pdf" hidden></div>
             <div id="chipHost"></div>
+            <div id="fileBusy"></div>
             <div id="fileErr" role="alert"></div>
           </div>
           <div class="opt-row"><label class="opt-lbl" for="optEng"><input type="checkbox" id="optEng"> <span>Also check engagement-letter terms (retainers, sponsor agreements)</span></label></div>
@@ -420,12 +422,18 @@ body[data-mode=zero] #zeroMsg{display:block}
 <script id="engine-js">
 /*__ENGINE__*/
 </script>
+<!-- PDF import: pdf.js v6.2.108 (c) Mozilla Foundation, Apache License 2.0, https://github.com/mozilla/pdf.js . Embedded as base64 text, inert until a PDF is chosen. -->
+<script type="text/plain" id="pdfjs-lib">__PDFJS_LIB__</script>
+<script type="text/plain" id="pdfjs-worker">__PDFJS_WORKER__</script>
+<script id="pdf-extract-js">
+/*__PDFEXTRACT__*/
+</script>
 <script>
 (function () {
 'use strict';
 
 /* ================= constants ================= */
-var LIMITS = { fileBytes: 2 * 1024 * 1024, chars: 200000, min: 100 };
+var LIMITS = { fileBytes: 2 * 1024 * 1024, pdfBytes: 15 * 1024 * 1024, pdfPages: 300, chars: 200000, min: 100 };
 var SEV = ['High', 'Medium', 'Low'];
 var DISCLAIMER = 'For lawyer review, not legal advice. This tool flags text patterns; it does not interpret your contract or replace an attorney.';
 var CATS = ['Liability & Indemnity', 'Termination', 'Payment & Fees', 'Term & Auto-renewal', 'IP & Confidentiality', 'Data & Privacy', 'Warranties & Disclaimers', 'Disputes & Governing Law', 'Other'];
@@ -486,7 +494,7 @@ function isMobile() { return mqMobile.matches; }
 /* ================= state ================= */
 var state = {
   text: '', result: null, findings: [], reviewed: new Set(), dismissed: new Set(), selectedId: null,
-  fSev: new Set(), fCat: new Set(), mode: 'input', docxNote: false, fileName: '', run: null, groups: ['core', 'extra'],
+  fSev: new Set(), fCat: new Set(), mode: 'input', docxNote: false, pdfNote: '', fileName: '', run: null, groups: ['core', 'extra'],
   nodeMap: [], lastOpener: null, mobileDetail: false
 };
 
@@ -532,7 +540,7 @@ src.addEventListener('keydown', function (e) {
 });
 $('btnAnalyze').addEventListener('click', function () { startAnalysis(src.value); });
 $('btnSample').addEventListener('click', function () {
-  src.value = SAMPLE; state.fileName = ''; state.docxNote = false; $('fileErr').replaceChildren(); renderChip(); updateInputMeta();
+  cancelPdfRead(false); src.value = SAMPLE; state.fileName = ''; state.docxNote = false; state.pdfNote = ''; $('fileErr').replaceChildren(); renderChip(); updateInputMeta();
   startAnalysis(SAMPLE);
 });
 
@@ -552,25 +560,28 @@ function renderChip() {
   var h = $('chipHost'); h.replaceChildren();
   if (!state.fileName) return;
   var chip = el('span', { cls: 'filechip' }, [el('span', { text: state.fileName }),
-    el('button', { cls: 'tbtn', text: 'Remove', attrs: { type: 'button', 'aria-label': 'Remove file ' + state.fileName }, on: { click: function () { state.fileName = ''; state.docxNote = false; renderChip(); } } })]);
+    el('button', { cls: 'tbtn', text: 'Remove', attrs: { type: 'button', 'aria-label': 'Remove file ' + state.fileName }, on: { click: function () { state.fileName = ''; state.docxNote = false; state.pdfNote = ''; renderChip(); } } })]);
   h.appendChild(chip);
   if (state.docxNote) h.appendChild(el('p', { cls: 'fine', text: "Converted from .docx. Formatting, comments and tracked changes aren't shown." }));
+  if (state.pdfNote) h.appendChild(el('p', { cls: 'fine', text: state.pdfNote }));
 }
 
-var UNSUPPORTED = { pdf: 'PDFs', doc: '.doc files', rtf: '.rtf files', odt: '.odt files', png: 'Images', jpg: 'Images', jpeg: 'Images', gif: 'Images', webp: 'Images', bmp: 'Images', tif: 'Images', tiff: 'Images', heic: 'Images', svg: 'Images' };
+var UNSUPPORTED = { doc: '.doc files', rtf: '.rtf files', odt: '.odt files', png: 'Images', jpg: 'Images', jpeg: 'Images', gif: 'Images', webp: 'Images', bmp: 'Images', tif: 'Images', tiff: 'Images', heic: 'Images', svg: 'Images' };
 function extOf(name) { var m = /\.([A-Za-z0-9]+)$/.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
 
 async function handleFile(file) {
   fileError('');
+  cancelPdfRead(false);
   var ext = extOf(file.name);
   var type = file.type || '';
-  var label = UNSUPPORTED[ext] || (/^image\//.test(type) ? 'Images' : (type === 'application/pdf' ? 'PDFs' : null));
+  if (ext === 'pdf' || type === 'application/pdf') { await handlePdf(file); return; }
+  var label = UNSUPPORTED[ext] || (/^image\//.test(type) ? 'Images' : null);
   if (label) {
-    fileError(label + " aren't supported" + (label === 'PDFs' ? ' yet' : '') + '. Copy the text and paste it here, or save the file as .docx or .txt.');
+    fileError(label + " aren't supported. Copy the text and paste it here, or save the file as .docx, .pdf or .txt.");
     return;
   }
   if (['txt', 'md', 'markdown', 'docx'].indexOf(ext) === -1) {
-    fileError((ext ? '.' + ext : 'This type of') + " files aren't supported. Use .txt, .md or .docx, or paste the text.");
+    fileError((ext ? '.' + ext : 'This type of') + " files aren't supported. Use .txt, .md, .docx or .pdf, or paste the text.");
     return;
   }
   if (file.size > LIMITS.fileBytes) { fileError('This file is ' + fmtSize(file.size) + '. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.'); return; }
@@ -584,6 +595,90 @@ async function handleFile(file) {
   if (text.length > LIMITS.chars) { fileError('This file is ' + fmtNum(text.length) + ' characters. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.'); return; }
   src.value = text; state.fileName = file.name; state.docxNote = ext === 'docx';
   renderChip(); updateInputMeta(); announce('File loaded: ' + file.name);
+}
+/* ---- .pdf: pdf.js is embedded as base64 and loaded lazily (Blob URLs only, no network) ---- */
+var PDF_MSG = {
+  scanned: "This PDF looks scanned (images, no text). OCR isn't built in; paste the text or use a text version.",
+  password: 'This PDF is password-protected. Remove the password and try again.',
+  notPdf: "This file has a .pdf name but isn't a PDF. Check that it's the right file, or paste the text.",
+  corrupt: "We couldn't read this PDF. It may be damaged. Try saving it again, or paste the text.",
+  unavailable: "PDF reading isn't available in this browser. Copy the text and paste it here, or save the file as .docx or .txt."
+};
+var pdfLib = null, pdfLoading = null, pdfRead = 0, pdfActive = false;
+function b64Blob(id) {
+  var bin = atob($(id).textContent.trim()), bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: 'text/javascript' }));
+}
+function loadPdfjs() {
+  if (pdfLib) return Promise.resolve(pdfLib);
+  if (pdfLoading) return pdfLoading;
+  pdfLoading = (async function () {
+    var libUrl = null, workerUrl = null;
+    try {
+      libUrl = b64Blob('pdfjs-lib'); workerUrl = b64Blob('pdfjs-worker');
+      var mod = await import(libUrl);
+      mod.GlobalWorkerOptions.workerSrc = workerUrl;
+      pdfLib = { mod: mod };   // Blob URLs stay alive: each PDF creates (and destroys) its own worker from them
+      return pdfLib;
+    } catch (e) {
+      if (libUrl) URL.revokeObjectURL(libUrl);
+      if (workerUrl) URL.revokeObjectURL(workerUrl);
+      throw e;
+    } finally { pdfLoading = null; }
+  })();
+  return pdfLoading;
+}
+function setReading(msg) {
+  var h = $('fileBusy'); h.replaceChildren();
+  if (!msg) return;
+  h.appendChild(el('div', { cls: 'inline-err' }, [neutralIcon(), el('span', { text: msg, attrs: { id: 'readText' } }),
+    el('button', { cls: 'tbtn', text: 'Cancel', attrs: { type: 'button', 'aria-label': 'Cancel reading the PDF' }, on: { click: function () { cancelPdfRead(true); $('btnChoose').focus(); } } })]));
+}
+function cancelPdfRead(say) {
+  if (!pdfActive) return;
+  pdfRead++; pdfActive = false; setReading('');
+  if (say) announce('Reading cancelled. Your text is unchanged.');
+}
+async function handlePdf(file) {
+  var token = ++pdfRead, task = null;
+  pdfActive = true;
+  function stale() { return token !== pdfRead; }
+  try {
+    if (file.size > LIMITS.pdfBytes) { fileError('This file is ' + fmtSize(file.size) + '. The limit for PDFs is 15 MB. Try pasting the sections you need.'); return; }
+    setReading('Reading PDF. This stays in your browser.'); announce('Reading PDF. This stays in your browser.');
+    var buf = await file.arrayBuffer();
+    if (stale()) return;
+    if (!PdfText.hasPdfHeader(new Uint8Array(buf))) { fileError(PDF_MSG.notPdf); return; }
+    var lib;
+    try { lib = await loadPdfjs(); } catch (e) { if (!stale()) fileError(PDF_MSG.unavailable); return; }
+    if (stale()) return;
+    task = lib.mod.getDocument({
+      data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true, disableFontFace: true,
+      useWorkerFetch: false, enableXfa: false, disableAutoFetch: true, disableStream: true, verbosity: 0
+    });
+    var doc = await task.promise;
+    if (stale()) return;
+    var res = await PdfText.extract(doc, {
+      maxPages: LIMITS.pdfPages, isCancelled: stale,
+      onPage: function (p, n) { var t = $('readText'); if (t) t.textContent = 'Reading PDF, page ' + p + ' of ' + n; }
+    });
+    if (res.cancelled || stale()) return;
+    if (res.scanned) { fileError(PDF_MSG.scanned); return; }
+    var text = res.text.replace(/\r\n?/g, '\n');
+    if (!text.trim()) { fileError(PDF_MSG.corrupt); return; }
+    if (text.length > LIMITS.chars) { fileError('This file is ' + fmtNum(text.length) + ' characters. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.'); return; }
+    var cut = res.truncated ? ' Only the first ' + LIMITS.pdfPages + ' pages were read.' : '';
+    src.value = text; state.fileName = file.name; state.docxNote = false;
+    state.pdfNote = "Text extracted from a PDF. Layout, tables and images aren't shown." + cut;
+    renderChip(); updateInputMeta(); announce('File loaded: ' + file.name + '.' + cut);
+  } catch (e) {
+    if (stale()) return;
+    fileError(e && e.name === 'PasswordException' ? PDF_MSG.password : PDF_MSG.corrupt);
+  } finally {
+    if (task) { try { task.destroy().catch(function () {}); } catch (e2) { /* ignore */ } }
+    if (!stale()) { pdfActive = false; setReading(''); }
+  }
 }
 function decodeUtf8(buf) {
   var t = new TextDecoder('utf-8', { fatal: true }).decode(buf);
@@ -702,6 +797,7 @@ function startAnalysis(text) {
     fileError('This text is ' + fmtNum(text.length) + ' characters. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.');
     return;
   }
+  cancelPdfRead(false);
   fileError('');
   $('errPanel').hidden = true;
   state.text = text.replace(/\r\n?/g, '\n');
@@ -816,8 +912,8 @@ $('btnNew').addEventListener('click', async function () {
   resetAll();
 });
 function resetAll() {
-  state.reviewed = new Set(); state.dismissed = new Set(); state.result = null; state.findings = []; state.selectedId = null; state.fileName = ''; state.docxNote = false;
-  src.value = ''; renderChip(); fileError(''); setMode('input'); updateInputMeta(); src.focus();
+  state.reviewed = new Set(); state.dismissed = new Set(); state.result = null; state.findings = []; state.selectedId = null; state.fileName = ''; state.docxNote = false; state.pdfNote = '';
+  cancelPdfRead(false); src.value = ''; renderChip(); fileError(''); setMode('input'); updateInputMeta(); src.focus();
 }
 window.addEventListener('beforeunload', function (e) {
   if (state.reviewed.size || state.dismissed.size) { e.preventDefault(); e.returnValue = ''; }
@@ -1031,6 +1127,7 @@ function renderFoot() {
   var parts = [fmtNum(words(state.text)) + ' words'];
   f.appendChild(document.createTextNode(parts.join(' · ')));
   if (state.docxNote) f.appendChild(el('div', { text: "Converted from .docx. Formatting, comments and tracked changes aren't shown." }));
+  if (state.pdfNote) f.appendChild(el('div', { text: state.pdfNote }));
   if (state.text.indexOf('SAMPLE ONLY - FICTIONAL CONTRACT') === 0) f.appendChild(el('div', { text: 'Sample, fictional.' }));
 }
 function renderContract() {

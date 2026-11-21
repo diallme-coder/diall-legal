@@ -15,6 +15,9 @@ function test(name, fn) {
   catch (e) { failed++; failures.push(name); console.log('  FAIL ' + name + '\n       ' + String(e && e.message).split('\n').join('\n       ')); }
 }
 
+const asyncQueue = [];
+function testAsync(name, fn) { asyncQueue.push([name, fn]); }
+
 // Pad a clause with a neutral heading so it is long enough to read like a real paragraph.
 const analyze = (text, tax) => RFD.analyze(text, tax || TAX);
 const hits = (text) => {
@@ -606,11 +609,150 @@ test('index.html never uses innerHTML/outerHTML/insertAdjacentHTML/document.writ
 });
 test('index.html makes no network requests and uses no storage or external assets', () => {
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
-  const app = html.slice(html.lastIndexOf('<script>'));
-  assert.ok(!/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie/.test(app));
-  assert.ok(!/<script[^>]+src=|<link[^>]+href=|@import|url\(\s*['"]?https?:/i.test(html));
-  assert.ok(/connect-src 'none'/.test(html));
+  // The only allowed non-app payloads are the two vendored pdf.js blocks: inert text/plain, pure base64.
+  const vend = /<script type="text\/plain" id="(pdfjs-lib|pdfjs-worker)">([A-Za-z0-9+\/]+=*)<\/script>/g;
+  const ids = []; let m;
+  while ((m = vend.exec(html))) ids.push(m[1]);
+  assert.deepStrictEqual(ids.sort(), ['pdfjs-lib', 'pdfjs-worker'], 'exactly the two vendored pdf.js blocks, base64 only');
+  const stripped = html.replace(vend, '<!--vendored-->');
+  assert.ok(stripped.length < 400000, 'nothing else large is embedded (' + stripped.length + ' chars after removing pdf.js blobs)');
+  const app = stripped.slice(stripped.lastIndexOf('<script>'));
+  assert.ok(!/\bfetch\s*\(|XMLHttpRequest|WebSocket|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie/.test(stripped.replace(/<script type="application\/json"[\s\S]*?<\/script>/g, '')), 'no fetch/XHR/WebSocket/beacon/storage in page code');
+  assert.ok(!/<script[^>]+src=|<link[^>]+href=|@import|url\(\s*['"]?https?:/i.test(stripped));
+  assert.ok(!/https?:\/\/(?!www\.w3\.org\/|schemas\.openxmlformats\.org\/)[^\s"'<>)]+/.test(app.replace(/\/\*[\s\S]*?\*\//g, '')), 'no external URLs in app script');
+  assert.ok(/connect-src 'none'/.test(html) && /default-src 'none'/.test(html));
+});
+test('CSP: only blob: added to script-src; no remote hosts, no wasm-unsafe-eval, no unsafe-eval', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  const csp = /http-equiv="Content-Security-Policy" content="([^"]*)"/.exec(html)[1];
+  const dirs = {}; csp.split(';').forEach((d) => { const [k, ...v] = d.trim().split(/\s+/); if (k) dirs[k] = v; });
+  assert.deepStrictEqual(dirs['script-src'], ["'unsafe-inline'", 'blob:']);
+  assert.deepStrictEqual(dirs['worker-src'], ['blob:']);
+  assert.deepStrictEqual(dirs['connect-src'], ["'none'"]);
+  assert.deepStrictEqual(dirs['default-src'], ["'none'"]);
+  assert.ok(!/unsafe-eval|wasm-unsafe-eval|https?:|\*/.test(csp), csp);
+});
+test('template: PDF import rules (lazy load, limits, friendly errors, no innerHTML)', () => {
+  const tpl = fs.readFileSync(path.join(__dirname, 'index.template.html'), 'utf8');
+  assert.ok(/pdfBytes: 15 \* 1024 \* 1024/.test(tpl) && /pdfPages: 300/.test(tpl) && /fileBytes: 2 \* 1024 \* 1024/.test(tpl));
+  assert.ok(!/UNSUPPORTED = \{[^}]*\bpdf:/.test(tpl), 'pdf removed from UNSUPPORTED');
+  assert.ok(/accept="[^"]*\.pdf/.test(tpl));
+  assert.ok(/isEvalSupported: false/.test(tpl) && /useSystemFonts: true/.test(tpl) && !/cMapUrl|standardFontDataUrl|wasmUrl/.test(tpl));
+  assert.ok(/await import\(libUrl\)/.test(tpl) && /GlobalWorkerOptions\.workerSrc = workerUrl/.test(tpl));
+  assert.ok(/task\.destroy\(\)/.test(tpl), 'pdf.js document/worker destroyed after reading');
+  assert.ok(tpl.indexOf("This PDF looks scanned (images, no text). OCR isn't built in; paste the text or use a text version.") !== -1);
+  assert.ok(tpl.indexOf('This PDF is password-protected. Remove the password and try again.') !== -1);
+  assert.ok(/Scanned PDFs \(pictures of pages\) are not/.test(tpl));
+});
+test('build.js embeds pdf.js as base64 text/plain blocks and still guards "</script" / "<!--"', () => {
+  const b = fs.readFileSync(path.join(__dirname, 'build.js'), 'utf8');
+  assert.ok(/toString\('base64'\)/.test(b) && /__PDFJS_LIB__/.test(b) && /__PDFJS_WORKER__/.test(b));
 });
 
-console.log('\n' + passed + ' passed, ' + failed + ' failed');
-if (failed) { console.log('Failed: ' + failures.join('; ')); process.exit(1); }
+/* ---------- PDF import: the SAME extraction function the page uses, run on real fixtures with pdf.js (legacy build, node) ---------- */
+console.log('PDF import');
+const PdfText = require('./vendor/pdf-extract.js');
+const FX = (f) => path.join(__dirname, 'fixtures', f);
+const LEGACY = process.env.PDFJS_LEGACY_DIR || '/opt/npm-tools/node_modules/pdfjs-dist/legacy/build';
+let pdfjsP = null;
+const pdfjs = () => pdfjsP || (pdfjsP = import(require('node:url').pathToFileURL(path.join(LEGACY, 'pdf.mjs')).href).then((m) => {
+  m.GlobalWorkerOptions.workerSrc = require('node:url').pathToFileURL(path.join(LEGACY, 'pdf.worker.mjs')).href;   // node: fake worker, no thread
+  return m;
+}));
+async function openPdf(buf) {
+  const lib = await pdfjs();
+  const task = lib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true, disableFontFace: true, useWorkerFetch: false, enableXfa: false, verbosity: 0 });
+  return { task, doc: await task.promise };
+}
+async function extractFile(f, opts) {
+  const { task, doc } = await openPdf(fs.readFileSync(FX(f)));
+  try { return await PdfText.extract(doc, opts); } finally { await task.destroy(); }
+}
+const ruleSet = (text) => { const r = analyze(text); const set = new Set(); r.findings.forEach((x) => { set.add(x.ruleId); x.alsoMatches.forEach((a) => set.add(a)); }); return { set, r }; };
+const CORE5 = ['auto-renewal-trap', 'unilateral-change', 'broad-indemnification', 'non-compete-restrictive-covenant', 'jury-waiver-arbitration'];
+
+testAsync('sample-contract.pdf: same five core categories and same severity counts as the txt sample', async () => {
+  const res = await extractFile('sample-contract.pdf');
+  assert.ok(!res.scanned && res.pagesRead >= 2, 'pages: ' + res.pagesRead);
+  const pdf = ruleSet(res.text), txt = ruleSet(SAMPLE);
+  CORE5.forEach((id) => assert.ok(pdf.set.has(id), 'PDF text missing ' + id));
+  assert.deepStrictEqual([...pdf.set].sort(), [...txt.set].sort());
+  assert.deepStrictEqual(pdf.r.summary, txt.r.summary);
+});
+testAsync('simple-agreement.pdf (3 pages): reads every page, keeps paragraph breaks, finds core rules', async () => {
+  const res = await extractFile('simple-agreement.pdf');
+  assert.strictEqual(res.pagesRead, 3); assert.strictEqual(res.truncated, false); assert.strictEqual(res.scanned, false);
+  assert.ok(/\n\n1\. Services\n\n1\.1 Provider will deliver/.test(res.text), 'paragraph breaks preserved');
+  assert.ok(!/\n\n\n/.test(res.text));
+  const { set } = ruleSet(res.text);
+  CORE5.forEach((id) => assert.ok(set.has(id), 'missing ' + id));
+});
+testAsync('scanned.pdf (image-only pages) is flagged as scanned with no text', async () => {
+  const res = await extractFile('scanned.pdf');
+  assert.strictEqual(res.scanned, true); assert.strictEqual(res.text, ''); assert.ok(res.avgChars < PdfText.SCAN_AVG);
+});
+testAsync('password.pdf rejects with PasswordException', async () => {
+  const lib = await pdfjs();
+  const task = lib.getDocument({ data: new Uint8Array(fs.readFileSync(FX('password.pdf'))), verbosity: 0 });
+  try { await task.promise; assert.fail('should have rejected'); }
+  catch (e) { assert.strictEqual(e.name, 'PasswordException'); }
+  finally { await task.destroy(); }
+});
+testAsync('plain text renamed .pdf is rejected by the %PDF- header check (and a text file with junk is not a PDF)', async () => {
+  assert.strictEqual(PdfText.hasPdfHeader(fs.readFileSync(FX('not-really.pdf'))), false);
+  assert.strictEqual(PdfText.hasPdfHeader(fs.readFileSync(FX('sample-contract.pdf'))), true);
+  assert.strictEqual(PdfText.hasPdfHeader(Buffer.concat([Buffer.alloc(300, 0x20), Buffer.from('%PDF-1.7\n')])), true, 'header within first 1024 bytes');
+  assert.strictEqual(PdfText.hasPdfHeader(Buffer.concat([Buffer.alloc(2000, 0x20), Buffer.from('%PDF-1.7\n')])), false, 'header after 1024 bytes');
+  assert.strictEqual(PdfText.hasPdfHeader(new Uint8Array(0)), false);
+});
+testAsync('corrupt (truncated) PDF rejects with an error and does not hang', async () => {
+  const buf = fs.readFileSync(FX('sample-contract.pdf')).subarray(0, 700);
+  const lib = await pdfjs();
+  const task = lib.getDocument({ data: new Uint8Array(buf), verbosity: 0 });
+  let err = null;
+  try { const doc = await task.promise; await PdfText.extract(doc); } catch (e) { err = e; } finally { await task.destroy(); }
+  assert.ok(err && err.name !== 'PasswordException', 'expected a non-password error, got ' + (err && err.name));
+});
+testAsync('page cap: 305-page document reads only 300 pages and reports truncation; cancel stops early', async () => {
+  let got = 0;
+  const mk = (n) => ({ numPages: n, getPage: async () => { got++; return { getTextContent: async () => ({ items: [{ str: 'x'.repeat(40), transform: [10, 0, 0, 10, 50, 700], width: 200, height: 10 }] }), cleanup() {} }; } });
+  const r = await PdfText.extract(mk(305), { maxPages: 300 });
+  assert.strictEqual(r.pagesRead, 300); assert.strictEqual(r.truncated, true); assert.strictEqual(got, 300);
+  const r2 = await PdfText.extract(mk(10));
+  assert.strictEqual(r2.truncated, false);
+  let calls = 0;
+  const r3 = await PdfText.extract(mk(50), { isCancelled: () => ++calls > 3 });
+  assert.strictEqual(r3.cancelled, true);
+});
+
+const item = (str, x, y, w, h) => ({ str, transform: [h || 10, 0, 0, h || 10, x, y], width: w == null ? str.length * 5 : w, height: h || 10 });
+test('pageText: lines by y (tolerance), left-to-right, spaces only at gaps', () => {
+  const t = PdfText.pageText([item('World', 100, 700.8), item('Hello', 50, 700), item('Next', 50, 686)]);
+  assert.strictEqual(t, 'Hello World\nNext');
+  assert.strictEqual(PdfText.pageText([item('Hel', 50, 700), item('lo', 65, 700)]), 'Hello', 'touching fragments join without a space');
+  assert.strictEqual(PdfText.pageText([item('Hello', 50, 700), item(' ', 75, 700, 3), item('there', 78, 700)]), 'Hello there', 'no double space');
+});
+test('pageText: blank line only when the vertical gap exceeds ~1.5x the normal line gap', () => {
+  const lines = [item('a1', 50, 700), item('a2', 50, 686), item('a3', 50, 672), item('b1', 50, 644), item('b2', 50, 630)];
+  assert.strictEqual(PdfText.pageText(lines), 'a1\na2\na3\n\nb1\nb2');
+});
+test('pageText: hyphenated word merged only when the next line starts lowercase', () => {
+  const mk = (a, b) => PdfText.pageText([item(a, 50, 700), item(b, 50, 686), item('pad', 50, 672), item('pad', 50, 658)]);
+  assert.strictEqual(mk('the agree-', 'ment is signed').split('\n')[0], 'the agreement is signed');
+  assert.strictEqual(mk('the agree-', 'Ment is signed').split('\n')[0], 'the agree-');
+  assert.strictEqual(mk('well -', 'known').split('\n')[0], 'well -');
+  assert.strictEqual(mk('term of 12-', '24 months').split('\n')[0], 'term of 12-');
+});
+test('pageText: ligatures and odd spaces are normalised; empty and non-text items ignored', () => {
+  assert.strictEqual(PdfText.pageText([item('oﬃce clﬁ', 50, 700)]), 'office clfi');
+  assert.strictEqual(PdfText.pageText([{ type: 'beginMarkedContent' }, item('', 10, 10)]), '');
+});
+
+(async () => {
+  for (const [name, fn] of asyncQueue) {
+    try { await fn(); passed++; console.log('  ok   ' + name); }
+    catch (e) { failed++; failures.push(name); console.log('  FAIL ' + name + '\n       ' + String(e && e.message).split('\n').join('\n       ')); }
+  }
+  console.log('\n' + passed + ' passed, ' + failed + ' failed');
+  if (failed) { console.log('Failed: ' + failures.join('; ')); process.exit(1); }
+})();
