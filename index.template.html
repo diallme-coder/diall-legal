@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Red Flag &amp; Risk Detector</title>
+<style>
+:root{
+  --bg:#F6F7F9;--surface:#FFFFFF;--ink:#1B2430;--muted:#4A5565;--border:#C9CFD8;--ctl:#8A94A3;--focus:#0B57D0;
+  --sev-high-fg:#A3202F;--sev-high-bg:#FBE6E8;--sev-high-ln:#C23A48;
+  --sev-med-fg:#7A4300;--sev-med-bg:#FCEFD6;--sev-med-ln:#B86E00;
+  --sev-low-fg:#1D5A85;--sev-low-bg:#E4F0F8;--sev-low-ln:#3E7FAE;
+  --ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ctl-h:36px;--ease:cubic-bezier(.2,0,0,1);
+}
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.5rem var(--ui);-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:absolute;left:8px;top:-60px;z-index:100;background:var(--surface);border:1px solid var(--ctl);border-radius:4px;padding:8px 12px;color:var(--ink);font-size:.875rem}
+.skip:focus{top:8px}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono)}
+
+/* severity tokens */
+.sev-High{--fg:var(--sev-high-fg);--bg:var(--sev-high-bg);--ln:var(--sev-high-ln)}
+.sev-Medium{--fg:var(--sev-med-fg);--bg:var(--sev-med-bg);--ln:var(--sev-med-ln)}
+.sev-Low{--fg:var(--sev-low-fg);--bg:var(--sev-low-bg);--ln:var(--sev-low-ln)}
+.ico{display:inline-block;width:16px;height:16px;flex:none;vertical-align:-3px}
+.badge{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;background:var(--bg);border:1px solid var(--ln);border-radius:4px;color:var(--fg);font-size:.8125rem;line-height:1.125rem;font-weight:600;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;min-height:24px;padding:0 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);font-size:.8125rem;font-weight:600;color:var(--ink)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:var(--ctl-h);padding:0 14px;border:1px solid var(--ctl);border-radius:4px;background:var(--surface);color:var(--ink);font-size:.875rem;font-weight:500;cursor:pointer;transition:background-color 120ms var(--ease)}
+.btn:hover{background:#EEF1F5}
+.btn[aria-pressed=true]{background:#E8EEF9;border-color:var(--focus);color:#0A3D91}
+.btn.primary{background:var(--focus);border-color:var(--focus);color:#fff;font-weight:600}
+.btn.primary:hover{background:#0A4CB5}
+.btn[disabled]{background:#EEF0F3;border-color:var(--border);color:#5B6573;cursor:not-allowed}
+.btn.link{border:0;background:none;color:var(--focus);padding:0 4px;min-height:var(--ctl-h);text-decoration:underline}
+.btn.link:hover{background:none;color:#0A3D91}
+.tbtn{border:0;background:none;color:var(--focus);text-decoration:underline;cursor:pointer;font-size:.875rem;padding:6px 4px;min-height:32px}
+@media (max-width:1023.98px),(pointer:coarse){:root{--ctl-h:44px}.tbtn{min-height:44px}}
+
+/* app shell */
+.app{display:flex;flex-direction:column;min-height:100vh}
+header.top{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 24px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap}
+header.top h1{margin:0;font-size:1.125rem;line-height:1.5rem;font-weight:600;flex:1 1 auto}
+header.top .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.disc{background:#EEF0F3;border-bottom:1px solid var(--border);padding:8px 24px;font-size:.8125rem;line-height:1.125rem;font-weight:600;min-height:36px;display:flex;align-items:center}
+main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+
+/* export menu */
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 4px);z-index:50;min-width:210px;background:var(--surface);border:1px solid var(--ctl);border-radius:8px;padding:4px}
+.menu button{display:block;width:100%;text-align:left;min-height:var(--ctl-h);padding:0 12px;border:0;background:none;border-radius:4px;font-size:.875rem;cursor:pointer}
+.menu button:hover,.menu button:focus-visible{background:#EEF1F5}
+
+/* input view */
+.input-wrap{width:100%;max-width:720px;margin:0 auto;padding:32px 24px 48px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px}
+.input-title{margin:0 0 8px;font-size:1.75rem;line-height:2.25rem;font-weight:600}
+.lead{margin:0 0 16px;color:var(--muted)}
+label.fl{display:block;margin:0 0 4px;font-size:.875rem;font-weight:600}
+textarea#src{width:100%;min-height:calc(12 * 1.5rem + 24px);padding:12px;border:1px solid var(--ctl);border-radius:4px;background:#fff;font:400 1rem/1.5rem var(--ui);resize:vertical}
+.meta-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.75rem;line-height:1rem;font-weight:500;color:var(--muted);margin-top:4px}
+.drop{margin-top:16px;padding:16px;border:1px dashed var(--ctl);border-radius:8px;background:#FAFBFC;display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-size:.875rem}
+.drop.over{border:2px solid var(--focus);background:#EEF4FD}
+.filechip{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:2px 4px 2px 10px;border:1px solid var(--border);border-radius:4px;font-size:.8125rem;font-weight:600;background:var(--surface)}
+.notice{display:flex;gap:8px;align-items:flex-start;margin-top:12px;padding:10px 12px;background:var(--surface);border:1px solid var(--ctl);border-radius:8px;font-size:.875rem;line-height:1.25rem}
+.notice .ico{margin-top:2px}
+.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.fine{font-size:.8125rem;line-height:1.125rem;color:var(--muted);margin:12px 0 0}
+
+/* layout of results */
+.panes{flex:1 1 auto;min-height:0;display:block}
+#contractSection{min-width:0}
+.contract-scroll{padding:24px 16px 48px}
+.contract-inner{max-width:68ch;margin:0 auto}
+#contractText{font:400 1.0625rem/1.7rem var(--serif);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+.contract-foot{max-width:68ch;margin:24px auto 0;font-size:.75rem;line-height:1rem;font-weight:500;color:var(--muted);border-top:1px solid var(--border);padding-top:8px}
+#analyzing .skel,.skel{background:#E3E7ED;border-radius:4px}
+body[data-mode=analyzing] #contractText{opacity:.6}
+
+/* highlights */
+span.hl{font:inherit;color:inherit;text-align:inherit;background:var(--bg);border:0;padding:0;margin:0;cursor:pointer;white-space:inherit;text-decoration-line:underline;text-decoration-color:var(--ln);text-decoration-thickness:2px;text-underline-offset:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone;scroll-margin-block:96px;transition:outline-color 120ms var(--ease)}
+span.hl.sev-Medium{text-decoration-style:dashed}
+span.hl.sev-Low{text-decoration-style:dotted}
+span.hl:hover{text-decoration-thickness:3px}
+span.hl[aria-current=true]{outline:2px solid var(--focus);outline-offset:2px}
+span.hl:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+span.hl.reviewed{background:transparent}
+.hl-mark{display:inline-flex;align-items:center;gap:2px;margin-left:4px;padding:0 4px;border-radius:3px;background:var(--bg);color:var(--fg);font:700 .75rem/1rem var(--ui);text-decoration:none;white-space:nowrap;vertical-align:baseline;-webkit-user-select:none;user-select:none}
+.hl-mark .ico{width:12px;height:12px;vertical-align:-2px}
+.hl-mark .lbl{display:none}
+span.hl[aria-current=true] .hl-mark{box-shadow:0 0 0 1px var(--focus)}
+::highlight(rfd-jump){background:#D6E4FB}
+
+/* findings panel pieces */
+.results-h{margin:0;font-size:1.375rem;line-height:1.75rem;font-weight:600}
+.results-h:focus{outline:none}
+.results-h:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sumcard{padding:12px 24px 8px;border-bottom:1px solid var(--border);background:var(--surface)}
+.sumline{margin:4px 0 0;font-size:.875rem;line-height:1.25rem}
+.sumline strong{font-weight:600}
+.subline{margin:2px 0 0;font-size:.8125rem;line-height:1.125rem;color:var(--muted)}
+.filters{padding:4px 24px 8px;background:var(--surface);border-bottom:1px solid var(--border)}
+.fgroup{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.fgroup .btn{min-height:var(--ctl-h);padding:0 10px;font-size:.8125rem;font-weight:600}
+.fgroup.cats .btn{font-weight:500}
+.fcount{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:500}
+.fstat{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.8125rem;color:var(--muted);min-height:24px}
+.flabel{font-size:.75rem;line-height:1rem;font-weight:600;color:var(--muted);margin:8px 0 0}
+.list{margin:0;padding:0;list-style:none}
+.row{display:grid;grid-template-columns:auto auto 1fr auto;grid-template-areas:"rank badge cat score" "title title title title";gap:2px 8px;align-items:center;min-height:56px;padding:8px 24px;border-bottom:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:.875rem;line-height:1.25rem;position:relative}
+.row:hover{background:#F1F4F8}
+.row[aria-selected=true]{background:#EAF1FC;box-shadow:inset 3px 0 0 var(--focus)}
+.row .rank{grid-area:rank;font-weight:600;min-width:2ch}
+.row .badge{grid-area:badge}
+.row .cat{grid-area:cat;color:var(--muted);font-size:.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .score{grid-area:score;font:500 .8125rem var(--mono);color:var(--ink)}
+.row .ttl{grid-area:title;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.row.done .ttl{color:var(--muted);font-weight:400}
+.row .st{font-size:.75rem;color:var(--muted);font-weight:600}
+.empty-msg{padding:24px;color:var(--muted)}
+details.more{border-top:1px solid var(--border);background:var(--surface)}
+details.more>summary{cursor:pointer;padding:10px 24px;font-size:.875rem;font-weight:600;min-height:var(--ctl-h)}
+details.more .row{cursor:default}
+details.more .row:hover{background:var(--surface)}
+.qc-item{padding:8px 24px;border-top:1px solid var(--border);font-size:.8125rem;line-height:1.125rem}
+.qc-item b{font-weight:600}
+.restore{grid-column:1/-1}
+
+/* detail */
+.detail{padding:16px 24px 0;animation:fade 200ms var(--ease)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.d-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.875rem}
+.d-head .sc{margin-left:auto;font:600 .875rem var(--mono)}
+.d-sub{margin:4px 0 0;font-size:.75rem;line-height:1rem;color:var(--muted);text-align:right}
+.detail h3{margin:12px 0 0;font-size:1.125rem;line-height:1.5rem;font-weight:600;overflow-wrap:anywhere}
+.detail h3:focus{outline:none}
+.detail h4{margin:16px 0 4px;font-size:.75rem;line-height:1rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.detail p{margin:0 0 8px}
+.detail ul{margin:0;padding-left:20px}
+.detail li{margin:0 0 4px}
+.flag{font-size:.8125rem;color:var(--muted);margin:2px 0 0}
+blockquote.quote{margin:0;padding:8px 12px;background:var(--bg);border-left:3px solid var(--ln);font:400 1.0625rem/1.7rem var(--serif);overflow-wrap:anywhere;white-space:pre-wrap}
+.qacts{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px;font-size:.8125rem;color:var(--muted)}
+.label-s{font-size:.8125rem;font-weight:600}
+.mitq{font-family:var(--serif);font-size:.9375rem}
+.sticky-foot{position:sticky;bottom:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px -24px 0;padding:12px 24px;background:var(--surface);border-top:1px solid var(--border)}
+.status{margin-left:auto;font-size:.8125rem;font-weight:600;color:var(--muted)}
+.back-btn,.show-btn{display:none}
+
+/* skeleton */
+#skeleton{padding:24px}
+.skel{height:16px;margin:0 0 12px}
+.skel.row-s{height:40px}
+.bar{position:relative;height:4px;overflow:hidden;background:#E3E7ED;border-radius:2px;margin:12px 0}
+.bar::after{content:"";position:absolute;inset:0 auto 0 0;width:30%;background:var(--focus);animation:slide 1.2s infinite var(--ease)}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+
+/* error panel */
+.errpanel{margin-bottom:16px;padding:16px;background:var(--surface);border:1px solid var(--ctl);border-radius:8px}
+.errpanel h2{margin:0 0 4px;font-size:1.375rem;line-height:1.75rem;font-weight:600}
+.errpanel .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.inline-err{margin-top:8px;display:flex;gap:8px;font-size:.875rem;padding:8px 12px;border:1px solid var(--ctl);border-radius:4px;background:var(--surface)}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;background:var(--ink);color:#fff;border-radius:8px;font-size:.875rem;max-width:calc(100vw - 32px)}
+.toast .tbtn{color:#C9DCFB;padding:4px 8px}
+
+dialog{border:1px solid var(--ctl);border-radius:8px;padding:24px;max-width:min(560px,calc(100vw - 32px));color:var(--ink);background:var(--surface)}
+dialog::backdrop{background:rgb(27 36 48 / .4)}
+dialog h2{margin:0 0 8px;font-size:1.375rem;line-height:1.75rem}
+dialog textarea{width:100%;min-height:200px;font:400 .8125rem/1.25rem var(--mono);padding:8px;border:1px solid var(--ctl);border-radius:4px}
+dialog .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* mode switching */
+#analyzing,#resultsHead,.stripwrap,.tabs,.peek,#printReport,#sheetBackdrop{display:none}
+body[data-mode=input] #findingsAside{display:none}
+body[data-mode=input] #inputView{display:block}
+body:not([data-mode=input]) #inputView{display:none}
+body[data-mode=input] #contractSection{display:none}
+body[data-mode=input] header .res-only{display:none}
+body[data-mode=analyzing] header .res-only{display:none}
+body[data-mode=analyzing] #findingsAside>:not(#analyzing){display:none}
+body[data-mode=analyzing] #analyzing{display:block}
+body[data-mode=zero] #listZone,body[data-mode=zero] #detailZone,body[data-mode=zero] #filtersZone{display:none}
+body[data-mode=zero] #zeroMsg{display:block}
+#zeroMsg{display:none;padding:16px 24px}
+#zeroMsg h2{margin:0 0 4px;font-size:1.375rem;line-height:1.75rem;font-weight:600}
+
+/* desktop */
+@media (min-width:1024px){
+  body{overflow:hidden}
+  .app{height:100vh;height:100dvh;min-height:0}
+  .panes{display:flex}
+  main{overflow:hidden}
+  body[data-mode=input] main{overflow:auto}
+  #contractSection{flex:1 1 auto;min-width:480px;overflow:auto;background:var(--bg)}
+  .contract-scroll{padding:24px 32px 48px}
+  #findingsAside{flex:0 0 clamp(400px,36vw,520px);width:clamp(400px,36vw,520px);display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--border);background:var(--surface)}
+  #zoneA{flex:none}
+  #listZone{flex:1 0 160px;min-height:160px;overflow:auto}
+  #detailZone{flex:0 1 50%;min-height:180px;overflow:auto;border-top:1px solid var(--border);position:relative}
+  body[data-mode=zero] #findingsAside{overflow:auto}
+  .tabs,.stripwrap,.peek{display:none!important}
+  .fgroup.cats{max-height:80px;overflow:auto}
+  #findingsAside{overflow:hidden}
+  .flt-open,.sheet-close{display:none}
+}
+@media (min-width:1024px) and (max-height:719.98px){#detailZone{flex-basis:60%;min-height:100px}.flabel,#sumAssume{display:none}.fgroup.cats{max-height:40px}.fgroup{margin-top:4px}.sumcard{padding-top:8px}.results-h{font-size:1.125rem;line-height:1.5rem}}
+@media (min-width:1024px){body[data-mode=results] #resultsHead,body[data-mode=zero] #resultsHead{display:block}}
+
+/* tablet / mobile */
+@media (max-width:1023.98px){
+  header.top,.disc{padding-left:16px;padding-right:16px}
+  .app{min-height:100vh}
+  body[data-mode=results] .stripwrap,body[data-mode=zero] .stripwrap{display:block}
+  body[data-mode=results] .tabs,body[data-mode=zero] .tabs{display:flex}
+  .stripwrap{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 16px}
+  .stripwrap .results-h{font-size:1.125rem}
+  .strip{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+  .tabs{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border)}
+  .tabs [role=tab]{flex:1;min-height:44px;border:0;border-bottom:3px solid transparent;background:none;font-size:.875rem;font-weight:600;cursor:pointer;color:var(--muted)}
+  .tabs [role=tab][aria-selected=true]{border-bottom-color:var(--focus);color:var(--ink)}
+  .panes{display:block}
+  body[data-tab=findings] #contractSection{display:none}
+  body[data-tab=contract] #findingsAside{display:none}
+  body[data-mode=analyzing] #findingsAside{display:block}
+  .contract-scroll{padding:16px}
+  .contract-inner,.contract-foot{max-width:720px}
+  #findingsAside{max-width:720px;margin:0 auto;width:100%;background:var(--surface)}
+  #resultsHead{display:none!important}
+  .sumcard,.filters,.row,.detail,.qc-item,#zeroMsg,details.more>summary{padding-left:16px;padding-right:16px}
+  .sticky-foot{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+  .back-btn,.show-btn{display:inline-flex}
+  body[data-mdetail="1"] #zoneA,body[data-mdetail="1"] #listZone{display:none}
+  body:not([data-mdetail="1"]) #detailZone{display:none}
+  .filters{display:none}
+  .filters.sheet{display:block;position:fixed;left:0;right:0;bottom:0;z-index:60;max-height:70vh;overflow:auto;box-shadow:0 -4px 16px rgb(27 36 48 / .12);border-top:1px solid var(--ctl);border-radius:8px 8px 0 0;max-width:720px;margin:0 auto;padding-top:12px}
+  #sheetBackdrop.on{display:block;position:fixed;inset:0;z-index:55;background:rgb(27 36 48 / .35)}
+  .peek.on{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;min-height:96px;padding:12px 16px;gap:12px;align-items:center;background:var(--surface);border-top:1px solid var(--ctl);flex-wrap:wrap}
+  .peek .ptxt{flex:1 1 200px;min-width:0}
+  .peek .ptit{font-size:.875rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .peek .pcat{font-size:.8125rem;color:var(--muted)}
+  .menu{right:0}
+  .toast{bottom:112px}
+}
+@media (min-width:1024px){.flt-open{display:none!important}}
+@media (max-width:1023.98px){.flt-open{display:inline-flex}}
+@media (max-width:479.98px){.row{grid-template-columns:auto auto 1fr auto}.input-wrap{padding:16px 16px 32px}.card{padding:16px}.input-title{font-size:1.5rem;line-height:2rem}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+  .bar{display:none}
+}
+@media (forced-colors:active){
+  span.hl{forced-color-adjust:none;color:CanvasText;background:transparent;text-decoration-color:Highlight}
+  .badge,.hl-mark{border:1px solid CanvasText}
+  span.hl[aria-current=true]{outline:3px solid Highlight}
+}
+
+/* print */
+@media print{
+  @page{margin:14mm}
+  html,body{background:#fff!important;height:auto!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000}
+  .app>*:not(#printReport),.toast,dialog,.skip,#live{display:none!important}
+  #printReport{display:block!important}
+  .pr-disc{border:1px solid #000;padding:6px 10px;font:600 .8125rem/1.125rem var(--ui);margin-bottom:12px}
+  #printReport h1{font-size:1.5rem;margin:0 0 4px}
+  #printReport h2{font-size:1.125rem;margin:20px 0 8px;break-after:avoid}
+  .pr-find{break-inside:avoid;border:1px solid #888;border-radius:4px;padding:8px 12px;margin:0 0 10px}
+  .pr-find h3{margin:6px 0 4px;font-size:1rem}
+  .pr-find p,.pr-find ul{margin:2px 0 6px;font-size:.875rem;line-height:1.25rem}
+  .pr-find blockquote{margin:4px 0;padding:4px 8px;border-left:3px solid #000;font:400 .9375rem/1.4rem var(--serif);white-space:pre-wrap}
+  .pr-find .badge,.pr-find .chip{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #printReport .contract{font:400 .9375rem/1.5rem var(--serif);white-space:pre-wrap;overflow-wrap:anywhere}
+  .hl-p{background:var(--bg);text-decoration-line:underline;text-decoration-color:var(--fg);text-decoration-thickness:2px;text-underline-offset:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .hl-p.sev-Medium{text-decoration-style:dashed}
+  .hl-p.sev-Low{text-decoration-style:dotted}
+  .hl-p.reviewed{background:transparent}
+  .hl-p .hl-mark{display:inline-flex;border:1px solid var(--fg);margin-left:3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .hl-p .hl-mark .lbl{display:inline}
+}
+.opt-row{margin:12px 0 4px}
+.opt-lbl{display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.opt-lbl input{width:18px;height:18px;margin:0;flex:none}
+</style>
+</head>
+<body data-mode="input" data-tab="contract">
+<a class="skip" href="#contractSection" id="skipContract">Skip to contract text</a>
+<a class="skip" href="#findingsAside" id="skipFindings">Skip to findings</a>
+<div class="app">
+  <header class="top">
+    <h1>Red Flag &amp; Risk Detector</h1>
+    <div class="acts">
+      <button type="button" class="btn res-only" id="btnEdit">Edit text</button>
+      <button type="button" class="btn res-only" id="btnNew">New contract</button>
+      <div class="menu-wrap res-only">
+        <button type="button" class="btn" id="btnExport" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">Export</button>
+        <div class="menu" id="exportMenu" role="menu" aria-label="Export" hidden>
+          <button type="button" role="menuitem" id="miPrint">Print / Save as PDF</button>
+          <button type="button" role="menuitem" id="miCopy">Copy as Markdown</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <div class="disc" role="note" id="disc">For lawyer review, not legal advice. This tool flags text patterns; it does not interpret your contract or replace an attorney.</div>
+
+  <div class="stripwrap" id="stripWrap">
+    <h2 class="results-h" id="stripHeading" tabindex="-1">Results</h2>
+    <div class="strip" id="strip"></div>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Contract and findings" id="tabs">
+    <button type="button" role="tab" id="tab-contract" aria-selected="true" aria-controls="contractSection" tabindex="0">Contract</button>
+    <button type="button" role="tab" id="tab-findings" aria-selected="false" aria-controls="findingsAside" tabindex="-1">Findings (0)</button>
+  </div>
+
+  <main id="main">
+    <div id="inputView">
+      <div class="input-wrap">
+        <div class="errpanel" id="errPanel" role="alert" hidden>
+          <h2>Analysis stopped</h2>
+          <p style="margin:0" id="errText">We couldn't finish the analysis. Your text is still here and nothing was uploaded.</p>
+          <div class="acts"><button type="button" class="btn primary" id="btnRetry">Try again</button><button type="button" class="btn" id="btnErrEdit">Edit text</button></div>
+        </div>
+        <div class="card">
+          <h2 class="input-title" id="inputTitle">Paste a contract to see what to read first.</h2>
+          <p class="lead">We rank risky clauses High, Medium or Low. Runs in your browser. Nothing is uploaded.</p>
+          <label class="fl" for="src">Contract text</label>
+          <textarea id="src" rows="12" spellcheck="false" aria-describedby="srcMeta srcHint"></textarea>
+          <div class="meta-row"><span id="srcMeta" class="num"></span><span id="srcHint"></span></div>
+          <div class="drop" id="drop">
+            <span id="dropLabel">Drop a .txt, .md or .docx file here, or choose a file.</span>
+            <div><button type="button" class="btn" id="btnChoose">Choose file</button> <input type="file" id="file" accept=".txt,.md,.markdown,.docx" hidden></div>
+            <div id="chipHost"></div>
+            <div id="fileErr" role="alert"></div>
+          </div>
+          <div class="opt-row"><label class="opt-lbl" for="optEng"><input type="checkbox" id="optEng"> <span>Also check engagement-letter terms (retainers, sponsor agreements)</span></label></div>
+          <div class="notice" role="note" id="assumeNotice"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7.25" y="4" width="1.5" height="5" fill="currentColor"/><circle cx="8" cy="11.3" r=".95" fill="currentColor"/></svg><span>Assumes you are the customer or client (the party receiving the services or paying the fees). Risk ratings would differ from the other side's point of view.</span></div>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btnAnalyze" disabled>Analyze</button>
+            <button type="button" class="btn link" id="btnSample">Load sample contract</button>
+          </div>
+          <p class="fine" id="marksNote" hidden>Analyzing again clears your review marks.</p>
+          <p class="fine">Runs in your browser. Nothing is uploaded. Shortcut: Ctrl or Cmd + Enter.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panes" id="panes">
+      <section id="contractSection" aria-label="Contract text" tabindex="-1">
+        <div class="contract-scroll" id="contractScroll">
+          <div class="contract-inner"><div id="contractText" aria-busy="false"></div></div>
+          <div class="contract-foot" id="contractFoot"></div>
+        </div>
+      </section>
+      <aside id="findingsAside" aria-label="Findings">
+        <div id="analyzing" aria-live="off">
+          <div id="skeleton">
+            <h2 class="results-h" style="font-size:1.375rem">Analyzing your contract</h2>
+            <p class="subline" id="stepText">Reading clauses</p>
+            <div class="bar" role="presentation"></div>
+            <p class="subline">This stays in your browser.</p>
+            <div class="skel" style="width:60%;margin-top:16px"></div>
+            <div class="skel row-s"></div><div class="skel row-s"></div><div class="skel row-s"></div><div class="skel row-s"></div><div class="skel row-s"></div>
+            <button type="button" class="btn" id="btnCancel">Cancel</button>
+          </div>
+        </div>
+        <div id="zoneA">
+          <div class="sumcard" id="sumCard">
+            <h2 class="results-h" id="resultsHead" tabindex="-1">Results</h2>
+            <p class="sumline" id="sumCounts"></p>
+            <p class="subline" id="sumReviewed"></p>
+            <p class="sumline" id="sumStart"></p>
+            <p class="subline" id="sumAssume">Assumes you are the customer or client.</p>
+            <button type="button" class="btn flt-open" id="btnFilter" aria-haspopup="dialog" style="margin-top:8px">Filter</button>
+          </div>
+          <div id="zeroMsg"></div>
+          <div class="filters" id="filtersZone">
+            <button type="button" class="btn sheet-close" id="btnSheetClose" style="float:right">Done</button>
+            <div class="flabel" id="sevLabel">Severity</div>
+            <div class="fgroup" id="sevGroup" role="group" aria-labelledby="sevLabel"></div>
+            <div class="flabel" id="catLabel">Category</div>
+            <div class="fgroup cats" id="catGroup" role="group" aria-labelledby="catLabel"></div>
+            <div class="fstat"><span id="showing" class="num"></span><button type="button" class="tbtn" id="btnClear" hidden>Clear filters</button></div>
+          </div>
+        </div>
+        <div id="listZone">
+          <ul class="list" id="list" role="listbox" aria-label="Findings, ranked highest score first" tabindex="-1"></ul>
+          <div class="empty-msg" id="filterEmpty" hidden><p style="margin:0 0 8px">No findings match these filters.</p><button type="button" class="btn" id="btnClear2">Clear filters</button></div>
+          <details class="more" id="dismissedBox" hidden><summary id="dismissedSum">Dismissed (0)</summary><ul class="list" id="dismissedList"></ul></details>
+          <details class="more" id="qcBox" hidden><summary id="qcSum">Not found in this contract (0)</summary><div id="qcList"></div></details>
+        </div>
+        <div id="detailZone" aria-live="off"></div>
+      </aside>
+    </div>
+    <div class="peek" id="peek" role="region" aria-label="Selected finding"></div>
+    <div id="sheetBackdrop"></div>
+  </main>
+  <div id="printReport" aria-hidden="true"></div>
+</div>
+
+<div id="live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="toastHost"></div>
+<dialog id="confirmDlg" aria-labelledby="confirmTitle"><h2 id="confirmTitle">Start over?</h2><p id="confirmMsg">Your review marks will be lost.</p><div class="acts"><button type="button" class="btn" id="confirmNo">Cancel</button><button type="button" class="btn primary" id="confirmYes">Start over</button></div></dialog>
+<dialog id="mdDlg" aria-labelledby="mdTitle"><h2 id="mdTitle">Copy the report</h2><p>Your browser blocked automatic copying. The Markdown is selected below; press Ctrl or Cmd + C.</p><textarea id="mdText" readonly aria-label="Markdown report"></textarea><div class="acts"><button type="button" class="btn primary" id="mdClose">Close</button></div></dialog>
+
+<script type="application/json" id="taxonomy">__TAXONOMY__</script>
+<script type="application/json" id="sample">__SAMPLE__</script>
+<script id="engine-js">
+/*__ENGINE__*/
+</script>
+<script>
+(function () {
+'use strict';
+
+/* ================= constants ================= */
+var LIMITS = { fileBytes: 2 * 1024 * 1024, chars: 200000, min: 100 };
+var SEV = ['High', 'Medium', 'Low'];
+var DISCLAIMER = 'For lawyer review, not legal advice. This tool flags text patterns; it does not interpret your contract or replace an attorney.';
+var CATS = ['Liability & Indemnity', 'Termination', 'Payment & Fees', 'Term & Auto-renewal', 'IP & Confidentiality', 'Data & Privacy', 'Warranties & Disclaimers', 'Disputes & Governing Law', 'Other'];
+var CAT_BY_RULE = {
+  'one-sided-liability-limit': 'Liability & Indemnity', 'broad-indemnification': 'Liability & Indemnity', 'personal-guarantee': 'Liability & Indemnity',
+  'unilateral-termination-convenience': 'Termination',
+  'unilateral-change': 'Payment & Fees', 'late-fees-liquidated-damages': 'Payment & Fees', 'one-way-fee-shifting': 'Payment & Fees',
+  'eng-non-refundable-fees': 'Payment & Fees', 'eng-fee-change-without-consent': 'Payment & Fees', 'eng-third-party-fee-liability': 'Payment & Fees',
+  'auto-renewal-trap': 'Term & Auto-renewal',
+  'ip-assignment-overreach': 'IP & Confidentiality', 'confidentiality-one-way-perpetual': 'IP & Confidentiality',
+  'data-use-sale-rights': 'Data & Privacy',
+  'eng-waiver-client-rights': 'Warranties & Disclaimers',
+  'jury-waiver-arbitration': 'Disputes & Governing Law', 'distant-governing-law-venue': 'Disputes & Governing Law', 'eng-mandatory-arbitration': 'Disputes & Governing Law',
+  'non-compete-restrictive-covenant': 'Other', 'eng-unclear-scope': 'Other'
+};
+var TAX = JSON.parse(document.getElementById('taxonomy').textContent);
+var SAMPLE = JSON.parse(document.getElementById('sample').textContent);
+
+/* ================= tiny DOM helpers (textContent only) ================= */
+function $(id) { return document.getElementById(id); }
+function el(tag, o, kids) {
+  var n = document.createElement(tag);
+  o = o || {};
+  if (o.cls) n.className = o.cls;
+  if (o.text != null) n.textContent = o.text;
+  if (o.attrs) Object.keys(o.attrs).forEach(function (k) { n.setAttribute(k, o.attrs[k]); });
+  if (o.on) Object.keys(o.on).forEach(function (k) { n.addEventListener(k, o.on[k]); });
+  (kids || []).forEach(function (c) { if (c) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+  return n;
+}
+var NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) { var n = document.createElementNS(NS, tag); Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); }); return n; }
+function icon(kind) {
+  var s = svgEl('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', 'class': 'ico' });
+  if (kind === 'High') {
+    s.appendChild(svgEl('polygon', { points: '8,1.5 15.3,14.2 0.7,14.2', fill: 'currentColor' }));
+    s.appendChild(svgEl('rect', { x: '7.2', y: '5.6', width: '1.6', height: '4.6', fill: '#fff' }));
+    s.appendChild(svgEl('circle', { cx: '8', cy: '12.2', r: '.95', fill: '#fff' }));
+  } else if (kind === 'Medium') {
+    s.appendChild(svgEl('polygon', { points: '8,1 15,8 8,15 1,8', fill: 'currentColor' }));
+  } else if (kind === 'Low') {
+    s.appendChild(svgEl('circle', { cx: '8', cy: '8', r: '6.5', fill: 'currentColor' }));
+  } else if (kind === 'check') {
+    s.appendChild(svgEl('path', { d: 'M2.8 8.6l3.3 3.3L13.2 4.6', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+  return s;
+}
+function badge(sev) { return el('span', { cls: 'badge sev-' + sev }, [icon(sev), el('span', { text: sev })]); }
+function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+function fmtSize(b) { return b >= 1048576 ? (Math.ceil(b / 10485.76) / 100).toFixed(2) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+function fmtNum(n) { return n.toLocaleString('en-US'); }
+function words(t) { var m = t.match(/\S+/g); return m ? m.length : 0; }
+function trunc(s, n) { s = s.replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) : s; }
+var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+var mqMobile = window.matchMedia('(max-width: 1023.98px)');
+function isMobile() { return mqMobile.matches; }
+
+/* ================= state ================= */
+var state = {
+  text: '', result: null, findings: [], reviewed: new Set(), dismissed: new Set(), selectedId: null,
+  fSev: new Set(), fCat: new Set(), mode: 'input', docxNote: false, fileName: '', run: null, groups: ['core', 'extra'],
+  nodeMap: [], lastOpener: null, mobileDetail: false
+};
+
+/* ================= live region / toast ================= */
+var liveEl = $('live');
+function announce(msg) { liveEl.textContent = ''; setTimeout(function () { liveEl.textContent = msg; }, 30); }
+var toastTimer = null;
+function toast(msg, actionLabel, action) {
+  var host = $('toastHost');
+  host.replaceChildren();
+  clearTimeout(toastTimer);
+  var kids = [el('span', { text: msg })];
+  if (actionLabel) kids.push(el('button', { cls: 'tbtn', text: actionLabel, attrs: { type: 'button' }, on: { click: function () { host.replaceChildren(); clearTimeout(toastTimer); action(); } } }));
+  host.appendChild(el('div', { cls: 'toast' }, kids));
+  toastTimer = setTimeout(function () { host.replaceChildren(); }, 6000);
+}
+
+/* ================= dialogs ================= */
+function confirmDialog(title, msg, okLabel) {
+  return new Promise(function (resolve) {
+    var d = $('confirmDlg'), opener = document.activeElement;
+    $('confirmTitle').textContent = title; $('confirmMsg').textContent = msg; $('confirmYes').textContent = okLabel;
+    function done(v) { $('confirmYes').onclick = $('confirmNo').onclick = null; d.onclose = null; if (d.open) d.close(); if (opener && opener.focus) opener.focus(); resolve(v); }
+    $('confirmYes').onclick = function () { done(true); };
+    $('confirmNo').onclick = function () { done(false); };
+    d.onclose = function () { done(false); };
+    d.showModal();
+  });
+}
+
+/* ================= input view ================= */
+var src = $('src');
+function updateInputMeta() {
+  var n = src.value.length;
+  $('srcMeta').textContent = fmtNum(n) + ' characters, ' + fmtNum(words(src.value)) + ' words';
+  var tooShort = n > 0 && n < LIMITS.min;
+  $('srcHint').textContent = tooShort ? 'Add at least 100 characters so there is something to review.' : '';
+  $('btnAnalyze').disabled = n < LIMITS.min;
+}
+src.addEventListener('input', updateInputMeta);
+src.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (!$('btnAnalyze').disabled) startAnalysis(src.value); }
+});
+$('btnAnalyze').addEventListener('click', function () { startAnalysis(src.value); });
+$('btnSample').addEventListener('click', function () {
+  src.value = SAMPLE; state.fileName = ''; state.docxNote = false; $('fileErr').replaceChildren(); renderChip(); updateInputMeta();
+  startAnalysis(SAMPLE);
+});
+
+function fileError(msg) {
+  var box = $('fileErr'); box.replaceChildren();
+  if (!msg) return;
+  box.appendChild(el('div', { cls: 'inline-err' }, [neutralIcon(), el('span', { text: msg })]));
+}
+function neutralIcon() {
+  var s = svgEl('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', 'class': 'ico' });
+  s.appendChild(svgEl('circle', { cx: '8', cy: '8', r: '6.5', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5' }));
+  s.appendChild(svgEl('rect', { x: '7.25', y: '4', width: '1.5', height: '5', fill: 'currentColor' }));
+  s.appendChild(svgEl('circle', { cx: '8', cy: '11.3', r: '.95', fill: 'currentColor' }));
+  return s;
+}
+function renderChip() {
+  var h = $('chipHost'); h.replaceChildren();
+  if (!state.fileName) return;
+  var chip = el('span', { cls: 'filechip' }, [el('span', { text: state.fileName }),
+    el('button', { cls: 'tbtn', text: 'Remove', attrs: { type: 'button', 'aria-label': 'Remove file ' + state.fileName }, on: { click: function () { state.fileName = ''; state.docxNote = false; renderChip(); } } })]);
+  h.appendChild(chip);
+  if (state.docxNote) h.appendChild(el('p', { cls: 'fine', text: "Converted from .docx. Formatting, comments and tracked changes aren't shown." }));
+}
+
+var UNSUPPORTED = { pdf: 'PDFs', doc: '.doc files', rtf: '.rtf files', odt: '.odt files', png: 'Images', jpg: 'Images', jpeg: 'Images', gif: 'Images', webp: 'Images', bmp: 'Images', tif: 'Images', tiff: 'Images', heic: 'Images', svg: 'Images' };
+function extOf(name) { var m = /\.([A-Za-z0-9]+)$/.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
+
+async function handleFile(file) {
+  fileError('');
+  var ext = extOf(file.name);
+  var type = file.type || '';
+  var label = UNSUPPORTED[ext] || (/^image\//.test(type) ? 'Images' : (type === 'application/pdf' ? 'PDFs' : null));
+  if (label) {
+    fileError(label + " aren't supported" + (label === 'PDFs' ? ' yet' : '') + '. Copy the text and paste it here, or save the file as .docx or .txt.');
+    return;
+  }
+  if (['txt', 'md', 'markdown', 'docx'].indexOf(ext) === -1) {
+    fileError((ext ? '.' + ext : 'This type of') + " files aren't supported. Use .txt, .md or .docx, or paste the text.");
+    return;
+  }
+  if (file.size > LIMITS.fileBytes) { fileError('This file is ' + fmtSize(file.size) + '. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.'); return; }
+  var text;
+  try {
+    var buf = await file.arrayBuffer();
+    if (ext === 'docx') text = await docxToText(buf); else text = decodeUtf8(buf);
+  } catch (e) { fileError("We couldn't read this file as text. Try saving it again as .txt or .docx."); return; }
+  text = text.replace(/\r\n?/g, '\n');
+  if (!text.trim()) { fileError("We couldn't read this file as text. Try saving it again as .txt or .docx."); return; }
+  if (text.length > LIMITS.chars) { fileError('This file is ' + fmtNum(text.length) + ' characters. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.'); return; }
+  src.value = text; state.fileName = file.name; state.docxNote = ext === 'docx';
+  renderChip(); updateInputMeta(); announce('File loaded: ' + file.name);
+}
+function decodeUtf8(buf) {
+  var t = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
+  if (t.indexOf('\u0000') !== -1) throw new Error('binary');
+  return t;
+}
+$('btnChoose').addEventListener('click', function () { $('file').click(); });
+$('file').addEventListener('change', function () { var f = this.files && this.files[0]; this.value = ''; if (f) handleFile(f); });
+var drop = $('drop');
+['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+drop.addEventListener('drop', function (e) {
+  var fl = e.dataTransfer && e.dataTransfer.files;
+  if (!fl || !fl.length) return;
+  if (fl.length > 1) { fileError('Please add one file at a time.'); return; }
+  handleFile(fl[0]);
+});
+window.addEventListener('dragover', function (e) { e.preventDefault(); });
+window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+/* ---- .docx: read the zip central directory by hand, inflate word/document.xml ---- */
+function u16(d, o) { return d.getUint16(o, true); }
+function u32(d, o) { return d.getUint32(o, true); }
+async function inflateRaw(bytes, maxOut) {
+  var ds = new DecompressionStream('deflate-raw');
+  var w = ds.writable.getWriter();
+  w.write(bytes).catch(function () {}); w.close().catch(function () {});
+  var r = ds.readable.getReader(), chunks = [], total = 0;
+  for (;;) {
+    var x = await r.read();
+    if (x.done) break;
+    total += x.value.length;
+    if (total > maxOut) { try { await r.cancel(); } catch (e) {} throw new Error('too big'); }
+    chunks.push(x.value);
+  }
+  var out = new Uint8Array(total), p = 0;
+  chunks.forEach(function (c) { out.set(c, p); p += c.length; });
+  return out;
+}
+var MAX_XML = 10 * 1024 * 1024;
+async function docxToText(buf) {
+  var bytes = new Uint8Array(buf), dv = new DataView(buf);
+  if (bytes.length < 22 || u32(dv, 0) !== 0x04034b50) throw new Error('not a zip');
+  var eocd = -1;
+  for (var i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65535); i--) { if (u32(dv, i) === 0x06054b50) { eocd = i; break; } }
+  if (eocd < 0) throw new Error('no eocd');
+  var count = u16(dv, eocd + 10), cdOff = u32(dv, eocd + 16);
+  if (count === 0xFFFF || cdOff === 0xFFFFFFFF) throw new Error('zip64');
+  var p = cdOff, entry = null;
+  for (var n = 0; n < count; n++) {
+    if (p + 46 > bytes.length || u32(dv, p) !== 0x02014b50) throw new Error('bad cd');
+    var nameLen = u16(dv, p + 28), extraLen = u16(dv, p + 30), cmtLen = u16(dv, p + 32);
+    var name = new TextDecoder('utf-8').decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    if (name === 'word/document.xml') { entry = { method: u16(dv, p + 10), csize: u32(dv, p + 20), usize: u32(dv, p + 24), off: u32(dv, p + 42) }; break; }
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  if (!entry) throw new Error('no document.xml');
+  if (u32(dv, entry.off) !== 0x04034b50) throw new Error('bad local header');
+  var dataStart = entry.off + 30 + u16(dv, entry.off + 26) + u16(dv, entry.off + 28);
+  if (dataStart + entry.csize > bytes.length) throw new Error('truncated');
+  if (entry.usize > MAX_XML) throw new Error('too big');
+  var raw = bytes.subarray(dataStart, dataStart + entry.csize), xmlBytes;
+  if (entry.method === 0) xmlBytes = raw;
+  else if (entry.method === 8) xmlBytes = await inflateRaw(raw, MAX_XML);
+  else throw new Error('method');
+  if (xmlBytes.length > MAX_XML) throw new Error('too big');
+  var xml = new TextDecoder('utf-8').decode(xmlBytes);
+  if (/<!DOCTYPE/i.test(xml)) throw new Error('doctype');
+  var doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('xml');
+  return docxXmlToText(doc);
+}
+function docxXmlToText(doc) {
+  var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  function ln(n) { return n.namespaceURI === W ? n.localName : ''; }
+  function paraText(p) {
+    var out = '';
+    (function walk(n) {
+      for (var c = n.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType !== 1) continue;
+        var t = ln(c);
+        if (t === 'del' || t === 'pPr' || t === 'instrText' || t === 'delText') continue;
+        if (t === 't') out += c.textContent;
+        else if (t === 'tab') out += '\t';
+        else if (t === 'br' || t === 'cr') out += '\n';
+        else walk(c);
+      }
+    })(p);
+    return out;
+  }
+  var blocks = [];
+  (function walk(n) {
+    for (var c = n.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType !== 1) continue;
+      var t = ln(c);
+      if (t === 'p') blocks.push(paraText(c));
+      else if (t === 'tbl') {
+        var rows = [];
+        Array.prototype.forEach.call(c.getElementsByTagNameNS(W, 'tr'), function (tr) {
+          var cells = [];
+          Array.prototype.forEach.call(tr.getElementsByTagNameNS(W, 'p'), function (p) { var s = paraText(p); if (s.trim()) cells.push(s); });
+          if (cells.length) rows.push(cells.join('\n'));
+        });
+        blocks.push(rows.join('\n'));
+      } else if (t !== 'del') walk(c);
+    }
+  })(doc.documentElement);
+  return blocks.filter(function (b) { return b.trim() !== ''; }).join('\n\n');
+}
+
+/* ================= analysis ================= */
+function startAnalysis(text) {
+  if (text.length < LIMITS.min) { $('srcHint').textContent = 'Add at least 100 characters so there is something to review.'; return; }
+  if (text.length > LIMITS.chars) {
+    fileError('This text is ' + fmtNum(text.length) + ' characters. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.');
+    return;
+  }
+  fileError('');
+  $('errPanel').hidden = true;
+  state.text = text.replace(/\r\n?/g, '\n');
+  state.groups = $('optEng').checked ? ['core', 'extra', 'engagement'] : ['core', 'extra'];
+  state.reviewed = new Set(); state.dismissed = new Set(); state.fSev = new Set(); state.fCat = new Set();
+  var run = { id: Date.now(), shown: false, shownAt: 0, timer: null, worker: null, cancelled: false, url: null };
+  state.run = run;
+  setMode('pending');
+  run.timer = setTimeout(function () {
+    if (run.cancelled || state.run !== run) return;
+    run.shown = true; run.shownAt = Date.now(); showAnalyzing();
+  }, 300);
+  function finish(res, err) {
+    if (run.cancelled || state.run !== run) return;
+    var wait = run.shown ? Math.max(0, 600 - (Date.now() - run.shownAt)) : 0;
+    setTimeout(function () {
+      if (run.cancelled || state.run !== run) return;
+      clearTimeout(run.timer);
+      if (run.worker) { run.worker.terminate(); run.worker = null; }
+      if (run.url) { URL.revokeObjectURL(run.url); run.url = null; }
+      state.run = null;
+      if (err) { showError(); return; }
+      showResults(res);
+    }, wait);
+  }
+  function syncRun() {
+    setTimeout(function () {
+      try { finish(RFD.analyze(state.text, TAX, { groups: state.groups }), null); } catch (e) { finish(null, e); }
+    }, 0);
+  }
+  try {
+    var wsrc = $('engine-js').textContent + '\nself.onmessage=function(e){try{self.postMessage({ok:true,result:RFD.analyze(e.data.text,e.data.taxonomy,{groups:e.data.groups})})}catch(err){self.postMessage({ok:false,message:String(err&&err.message||err)})}};';
+    run.url = URL.createObjectURL(new Blob([wsrc], { type: 'text/javascript' }));
+    run.worker = new Worker(run.url);
+    run.worker.onmessage = function (e) { e.data.ok ? finish(e.data.result, null) : finish(null, new Error(e.data.message)); };
+    run.worker.onerror = function (ev) { ev.preventDefault(); if (run.worker) { run.worker.terminate(); run.worker = null; } finish(null, new Error('worker error')); };
+    run.worker.postMessage({ text: state.text, taxonomy: TAX, groups: state.groups });
+  } catch (e) {
+    run.worker = null;
+    if (state.text.length <= 50000) syncRun(); else finish(null, e);
+  }
+}
+function showAnalyzing() {
+  setMode('analyzing');
+  renderPlainContract();
+  var steps = ['Reading clauses', 'Matching risk patterns', 'Ranking findings'], i = 0;
+  $('stepText').textContent = steps[0];
+  var run = state.run;
+  (function tick() { if (!state.run || state.run !== run) return; $('stepText').textContent = steps[i % 3]; i++; run.stepTimer = setTimeout(tick, 700); })();
+  announce('Analyzing your contract');
+}
+$('btnCancel').addEventListener('click', function () {
+  var run = state.run;
+  if (run) { run.cancelled = true; clearTimeout(run.timer); clearTimeout(run.stepTimer); if (run.worker) run.worker.terminate(); if (run.url) URL.revokeObjectURL(run.url); state.run = null; }
+  setMode('input'); src.focus(); announce('Analysis cancelled. Your text is unchanged.');
+});
+function showError() {
+  setMode('input');
+  $('errPanel').hidden = false;
+  $('btnRetry').focus();
+}
+$('btnRetry').addEventListener('click', function () { startAnalysis(src.value); });
+$('btnErrEdit').addEventListener('click', function () { $('errPanel').hidden = true; src.focus(); });
+
+function viewModel(res) {
+  var byId = {};
+  res.clauses.forEach(function (c) { byId[c.id] = c; });
+  return res.findings.map(function (f) {
+    var c = byId[f.clauseId] || {};
+    var m = {};
+    Object.keys(f).forEach(function (k) { m[k] = f[k]; });
+    m.dcat = CAT_BY_RULE[f.ruleId] || 'Other';
+    m.heading = c.heading || null;
+    m.locator = c.locator || null;
+    m.ctitle = c.heading ? ((c.locator ? c.locator + ' ' : '') + c.heading) : f.title;
+    return m;
+  });
+}
+function showResults(res) {
+  state.result = res;
+  state.findings = viewModel(res);
+  state.selectedId = state.findings.length ? state.findings[0].id : null;
+  state.mobileDetail = false;
+  document.body.dataset.mdetail = '0';
+  setMode(state.findings.length ? 'results' : 'zero');
+  renderAll();
+  var s = summaryCounts();
+  announce(state.findings.length
+    ? 'Analysis complete. ' + plural(s.total, 'finding') + ': ' + s.High + ' High, ' + s.Medium + ' Medium, ' + s.Low + ' Low.'
+    : 'Analysis complete. No clauses matched our risk patterns.');
+  var h = isMobile() ? $('stripHeading') : $('resultsHead');
+  if (isMobile()) setTab('contract', true);
+  h.focus({ preventScroll: true });
+  if (state.selectedId) requestAnimationFrame(function () { scrollToFinding(state.selectedId, true); });
+}
+
+/* ================= mode ================= */
+function setMode(m) {
+  state.mode = m;
+  document.body.dataset.mode = m === 'pending' ? 'input' : m;
+  $('contractText').setAttribute('aria-busy', m === 'analyzing' ? 'true' : 'false');
+  var inRes = m === 'results' || m === 'zero';
+  $('btnExport').disabled = !inRes;
+  if (m !== 'results' && m !== 'zero') { closeMenu(); }
+  $('marksNote').hidden = !(state.reviewed.size || state.dismissed.size);
+  if (m === 'input' || m === 'pending') updateInputMeta();
+  window.scrollTo(0, 0);
+}
+$('btnEdit').addEventListener('click', function () { setMode('input'); $('marksNote').hidden = !(state.reviewed.size || state.dismissed.size); src.focus(); });
+$('btnNew').addEventListener('click', async function () {
+  if (state.reviewed.size || state.dismissed.size) { if (!(await confirmDialog('Start over?', 'Your review marks will be lost.', 'Start over'))) return; }
+  resetAll();
+});
+function resetAll() {
+  state.reviewed = new Set(); state.dismissed = new Set(); state.result = null; state.findings = []; state.selectedId = null; state.fileName = ''; state.docxNote = false;
+  src.value = ''; renderChip(); fileError(''); setMode('input'); updateInputMeta(); src.focus();
+}
+window.addEventListener('beforeunload', function (e) {
+  if (state.reviewed.size || state.dismissed.size) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ================= derived data ================= */
+function openFindings() { return state.findings.filter(function (f) { return !state.dismissed.has(f.id); }); }
+function visibleFindings() {
+  return openFindings().filter(function (f) {
+    return (!state.fSev.size || state.fSev.has(f.severity)) && (!state.fCat.size || state.fCat.has(f.dcat));
+  });
+}
+function summaryCounts() {
+  var o = openFindings(), s = { High: 0, Medium: 0, Low: 0, total: o.length };
+  o.forEach(function (f) { s[f.severity]++; });
+  return s;
+}
+function findingById(id) { for (var i = 0; i < state.findings.length; i++) if (state.findings[i].id === id) return state.findings[i]; return null; }
+function ensureSelection() {
+  var vis = visibleFindings();
+  if (!vis.some(function (f) { return f.id === state.selectedId; })) state.selectedId = vis.length ? vis[0].id : null;
+}
+
+/* ================= rendering ================= */
+function renderAll() {
+  ensureSelection();
+  renderSummary(); renderFilters(); renderList(); renderContract(); renderDetail(); renderQc(); renderPeek();
+}
+function renderSummary() {
+  var s = summaryCounts(), total = s.total, nrev = 0;
+  state.findings.forEach(function (f) { if (state.reviewed.has(f.id) && !state.dismissed.has(f.id)) nrev++; });
+  var zero = state.findings.length === 0;
+  var strip = $('strip'); strip.replaceChildren();
+  SEV.forEach(function (sv) { strip.appendChild(el('span', { cls: 'badge sev-' + sv }, [icon(sv), el('span', { text: sv + ' ' + s[sv] })])); });
+  strip.appendChild(el('span', { cls: 'subline', text: nrev + ' of ' + total + ' reviewed' }));
+  $('tab-findings').textContent = 'Findings (' + total + ')';
+  if (zero) {
+    var n = state.result.summary.clauses, k = distinctCats();
+    var z = $('zeroMsg'); z.replaceChildren();
+    z.appendChild(el('h2', { text: 'No clauses matched our risk patterns.' }));
+    z.appendChild(el('p', { text: 'We scanned ' + n + ' clauses across ' + k + ' categories. That does not mean the contract is risk-free; a lawyer should still review it.' }));
+    z.appendChild(el('button', { cls: 'btn', text: 'Edit text', attrs: { type: 'button' }, on: { click: function () { $('btnEdit').click(); } } }));
+    $('sumCounts').textContent = '0 findings';
+    $('sumReviewed').textContent = ''; $('sumStart').replaceChildren();
+    return;
+  }
+  $('sumCounts').textContent = plural(total, 'finding') + ' · ' + s.High + ' High · ' + s.Medium + ' Medium · ' + s.Low + ' Low';
+  $('sumReviewed').textContent = nrev + ' of ' + total + ' reviewed';
+  var st = $('sumStart'); st.replaceChildren();
+  var open = openFindings();
+  if (open.length) {
+    var top = open[0];
+    st.appendChild(document.createTextNode('Start with #' + top.rank + ': '));
+    st.appendChild(el('button', { cls: 'tbtn', text: top.ctitle, attrs: { type: 'button' }, on: { click: function () { selectFinding(top.id, { scroll: true, fromList: true, openDetail: true }); } } }));
+  }
+}
+function distinctCats() { var s = {}; TAX.rules.forEach(function (r) { s[CAT_BY_RULE[r.id] || 'Other'] = 1; }); return Object.keys(s).length; }
+
+function renderFilters() {
+  var open = openFindings();
+  var sg = $('sevGroup'); sg.replaceChildren();
+  SEV.forEach(function (sv) {
+    var c = open.filter(function (f) { return f.severity === sv; }).length;
+    var b = el('button', { cls: 'btn sev-' + sv, attrs: { type: 'button', 'aria-pressed': state.fSev.has(sv) ? 'true' : 'false' }, on: { click: function () { toggleSet(state.fSev, sv); onFilterChange(); } } },
+      [el('span', { cls: 'sevmark', attrs: { style: 'color:var(--fg);display:inline-flex' } }, [icon(sv)]), el('span', { text: sv }), el('span', { cls: 'fcount', text: String(c) })]);
+    sg.appendChild(b);
+  });
+  var cg = $('catGroup'); cg.replaceChildren();
+  CATS.forEach(function (cat) {
+    var c = open.filter(function (f) { return f.dcat === cat; }).length;
+    if (!c) return;
+    cg.appendChild(el('button', { cls: 'btn', attrs: { type: 'button', 'aria-pressed': state.fCat.has(cat) ? 'true' : 'false' }, on: { click: function () { toggleSet(state.fCat, cat); onFilterChange(); } } },
+      [el('span', { text: cat }), el('span', { cls: 'fcount', text: String(c) })]));
+  });
+  var filtered = state.fSev.size || state.fCat.size, vis = visibleFindings().length;
+  $('showing').textContent = filtered ? 'Showing ' + vis + ' of ' + open.length : '';
+  $('btnClear').hidden = !filtered;
+}
+function toggleSet(s, v) { if (s.has(v)) s.delete(v); else s.add(v); }
+function onFilterChange() {
+  var before = state.selectedId;
+  ensureSelection();
+  renderFilters(); renderList(); renderContract(); renderDetail(); renderPeek();
+  var open = openFindings().length, vis = visibleFindings().length;
+  announce('Showing ' + vis + ' of ' + open);
+  if (state.selectedId && state.selectedId !== before) scrollToFinding(state.selectedId, false);
+}
+function clearFilters() { state.fSev.clear(); state.fCat.clear(); onFilterChange(); }
+$('btnClear').addEventListener('click', clearFilters);
+$('btnClear2').addEventListener('click', clearFilters);
+
+function rowEl(f, opts) {
+  opts = opts || {};
+  var rev = state.reviewed.has(f.id);
+  var r = el('li', { cls: 'row sev-' + f.severity + (rev ? ' done' : ''), attrs: { id: 'row-' + f.id, 'data-fid': f.id, role: 'option', 'aria-selected': f.id === state.selectedId ? 'true' : 'false', tabindex: '-1' } }, [
+    el('span', { cls: 'rank num', text: '#' + f.rank }),
+    el('span', { cls: 'badge sev-' + f.severity }, [icon(f.severity), el('span', { text: f.severity })]),
+    el('span', { cls: 'cat', text: f.dcat }),
+    el('span', { cls: 'score num', text: String(f.score) }),
+    el('span', { cls: 'ttl' }, [rev ? icon('check') : null, rev ? ' ' : null, document.createTextNode(f.ctitle), rev ? el('span', { cls: 'st', text: ' (Reviewed)' }) : null])
+  ]);
+  r.setAttribute('aria-label', 'Number ' + f.rank + ', ' + f.severity + ', ' + f.dcat + ', ' + f.ctitle + ', score ' + f.score + (rev ? ', reviewed' : ''));
+  return r;
+}
+function renderList() {
+  var list = $('list'); list.replaceChildren();
+  var vis = visibleFindings(), open = openFindings();
+  var any = state.findings.length > 0;
+  $('filterEmpty').hidden = !(any && vis.length === 0 && open.length > 0);
+  list.hidden = !any || vis.length === 0;
+  vis.forEach(function (f) { list.appendChild(rowEl(f)); });
+  var sel = list.querySelector('[aria-selected=true]');
+  var first = list.firstElementChild;
+  if (sel) sel.tabIndex = 0; else if (first) first.tabIndex = 0;
+  // dismissed
+  var dBox = $('dismissedBox'), dl = $('dismissedList'); dl.replaceChildren();
+  var dis = state.findings.filter(function (f) { return state.dismissed.has(f.id); });
+  dBox.hidden = dis.length === 0;
+  $('dismissedSum').textContent = 'Dismissed (' + dis.length + ')';
+  dis.forEach(function (f) {
+    var li = rowEl(f); li.removeAttribute('role'); li.removeAttribute('aria-selected'); li.removeAttribute('tabindex'); li.removeAttribute('id');
+    li.appendChild(el('button', { cls: 'btn restore', text: 'Restore', attrs: { type: 'button', 'aria-label': 'Restore finding ' + f.rank + ': ' + f.ctitle }, on: { click: function () { restoreFinding(f.id); } } }));
+    dl.appendChild(li);
+  });
+}
+$('list').addEventListener('click', function (e) {
+  var r = e.target.closest('[data-fid]'); if (!r) return;
+  selectFinding(r.dataset.fid, { scroll: true, fromList: true, openDetail: true });
+});
+$('list').addEventListener('keydown', function (e) {
+  var r = e.target.closest('[data-fid]'); if (!r) return;
+  var rows = Array.prototype.slice.call($('list').children), i = rows.indexOf(r), t = null;
+  if (e.key === 'ArrowDown') t = rows[Math.min(rows.length - 1, i + 1)];
+  else if (e.key === 'ArrowUp') t = rows[Math.max(0, i - 1)];
+  else if (e.key === 'Home') t = rows[0];
+  else if (e.key === 'End') t = rows[rows.length - 1];
+  else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFinding(r.dataset.fid, { scroll: true, fromList: true, openDetail: true }); return; }
+  if (t) { e.preventDefault(); rows.forEach(function (x) { x.tabIndex = -1; }); t.tabIndex = 0; t.focus(); }
+});
+
+/* ---- QC ---- */
+function renderQc() {
+  var qc = state.result ? state.result.qc : [];
+  var box = $('qcBox'), list = $('qcList'); list.replaceChildren();
+  box.hidden = !qc.length;
+  $('qcSum').textContent = 'Not found in this contract (' + qc.length + ')';
+  qc.forEach(function (q) {
+    list.appendChild(el('div', { cls: 'qc-item' }, [el('b', { text: q.title + '. ' }), document.createTextNode(q.message), el('span', { cls: 'subline', text: ' Check priority: ' + q.severity + '.' })]));
+  });
+}
+
+/* ---- contract rendering with highlights (DOM nodes + textContent only) ---- */
+function sevIdx(s) { return SEV.indexOf(s); }
+function placeHighlights(list) {
+  var prio = list.slice().sort(function (a, b) { return sevIdx(a.severity) - sevIdx(b.severity) || b.score - a.score || a.rank - b.rank; });
+  var placed = [];
+  prio.forEach(function (f) {
+    var free = [{ s: f.quote.start, e: f.quote.end }];
+    placed.forEach(function (p) {
+      var nf = [];
+      free.forEach(function (r) {
+        if (r.e <= p.s || r.s >= p.e) { nf.push(r); return; }
+        if (r.s < p.s) nf.push({ s: r.s, e: p.s });
+        if (r.e > p.e) nf.push({ s: p.e, e: r.e });
+      });
+      free = nf;
+    });
+    free.sort(function (a, b) { return (b.e - b.s) - (a.e - a.s); });
+    if (free[0] && free[0].e - free[0].s >= 12) placed.push({ f: f, s: free[0].s, e: free[0].e });
+  });
+  return placed.sort(function (a, b) { return a.s - b.s; });
+}
+function markEl(f, reviewed, print) {
+  var kids = [reviewed ? icon('check') : icon(f.severity)];
+  if (print) kids.unshift(el('span', { cls: 'lbl', text: f.severity.charAt(0) }));
+  kids.push(document.createTextNode(String(f.rank)));
+  return el('span', { cls: 'hl-mark num', attrs: { 'aria-hidden': 'true' } }, kids);
+}
+function hlName(f) { return f.severity + ', ' + f.dcat + ', finding ' + f.rank + ': ' + trunc(f.quote.text, 60); }
+function buildContract(container, text, list, mode, nodeMap) {
+  container.replaceChildren();
+  var placed = placeHighlights(list), pos = 0;
+  function plain(s, e) {
+    if (e <= s) return;
+    var tn = document.createTextNode(text.slice(s, e));
+    container.appendChild(tn);
+    if (nodeMap) nodeMap.push({ node: tn, start: s, end: e });
+  }
+  placed.forEach(function (p) {
+    plain(pos, p.s);
+    var f = p.f, rev = state.reviewed.has(f.id);
+    var tn = document.createTextNode(text.slice(p.s, p.e));
+    var h;
+    if (mode === 'print') {
+      h = el('span', { cls: 'hl-p sev-' + f.severity + (rev ? ' reviewed' : '') }, [tn, markEl(f, rev, true)]);
+    } else {
+      h = el('span', { cls: 'hl sev-' + f.severity + (rev ? ' reviewed' : ''), attrs: { role: 'button', tabindex: '0', 'data-fid': f.id, 'aria-label': hlName(f), 'aria-current': f.id === state.selectedId ? 'true' : 'false' } }, [tn, markEl(f, rev, false)]);
+      if (nodeMap) nodeMap.push({ node: tn, start: p.s, end: p.e });
+    }
+    container.appendChild(h);
+    pos = p.e;
+  });
+  plain(pos, text.length);
+}
+function renderPlainContract() {
+  var c = $('contractText'); c.replaceChildren(document.createTextNode(state.text));
+  renderFoot();
+}
+function renderFoot() {
+  var f = $('contractFoot'); f.replaceChildren();
+  var parts = [fmtNum(words(state.text)) + ' words'];
+  f.appendChild(document.createTextNode(parts.join(' · ')));
+  if (state.docxNote) f.appendChild(el('div', { text: "Converted from .docx. Formatting, comments and tracked changes aren't shown." }));
+  if (state.text.indexOf('SAMPLE ONLY - FICTIONAL CONTRACT') === 0) f.appendChild(el('div', { text: 'Sample, fictional.' }));
+}
+function renderContract() {
+  state.nodeMap = [];
+  buildContract($('contractText'), state.text, visibleFindings(), 'screen', state.nodeMap);
+  renderFoot();
+}
+$('contractText').addEventListener('click', function (e) {
+  var b = e.target.closest('.hl'); if (!b) return;
+  selectFinding(b.dataset.fid, { scroll: false, fromHighlight: true, scrollList: true });
+});
+
+$('contractText').addEventListener('keydown', function (e) {
+  var b = e.target.closest && e.target.closest('.hl');
+  if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); b.click(); }
+});
+
+/* ---- selection ---- */
+function selectFinding(id, o) {
+  o = o || {};
+  var f = findingById(id); if (!f) return;
+  state.selectedId = id;
+  if (o.fromHighlight) state.peekOpen = true;
+  if (o.fromList) state.peekOpen = false;
+  document.querySelectorAll('#contractText .hl').forEach(function (b) { b.setAttribute('aria-current', b.dataset.fid === id ? 'true' : 'false'); });
+  var rows = $('list').children, selRow = null;
+  Array.prototype.forEach.call(rows, function (r) {
+    var on = r.dataset.fid === id;
+    r.setAttribute('aria-selected', on ? 'true' : 'false'); r.tabIndex = on ? 0 : -1;
+    if (on) selRow = r;
+  });
+  renderDetail();
+  renderPeek(o.fromHighlight);
+  if (o.scrollList && selRow) selRow.scrollIntoView({ block: 'nearest', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+  if (o.scroll) scrollToFinding(id, false);
+  if (isMobile() && o.fromList && o.openDetail) openMobileDetail();
+}
+function scrollerRect() { return isMobile() ? null : $('contractSection'); }
+function scrollToRect(rect) {
+  var sc = scrollerRect(), smooth = reduceMotion.matches ? 'auto' : 'smooth';
+  if (sc) { var cr = sc.getBoundingClientRect(); sc.scrollTo({ top: sc.scrollTop + rect.top - cr.top - cr.height / 2 + rect.height / 2, behavior: smooth }); }
+  else window.scrollTo({ top: window.scrollY + rect.top - window.innerHeight / 2 + rect.height / 2, behavior: smooth });
+}
+function rangeFor(start, end) {
+  var m = state.nodeMap, a = null, b = null;
+  for (var i = 0; i < m.length; i++) {
+    var x = m[i];
+    if (!a && start >= x.start && start <= x.end) a = { n: x.node, o: start - x.start };
+    if (end >= x.start && end <= x.end) b = { n: x.node, o: end - x.start };
+    if (a && b && end <= x.end) break;
+  }
+  if (!a) return null;
+  var r = document.createRange();
+  try { r.setStart(a.n, Math.min(a.o, a.n.length)); if (b) r.setEnd(b.n, Math.min(b.o, b.n.length)); else r.setEnd(a.n, a.n.length); } catch (e) { return null; }
+  return r;
+}
+function flash(range) {
+  try { if (window.CSS && CSS.highlights && window.Highlight) { CSS.highlights.set('rfd-jump', new Highlight(range)); setTimeout(function () { CSS.highlights.delete('rfd-jump'); }, 2000); } } catch (e) {}
+}
+function jumpRange(start, end) {
+  if (isMobile()) setTab('contract', false);
+  requestAnimationFrame(function () {
+    var r = rangeFor(start, end);
+    if (!r) return;
+    scrollToRect(r.getBoundingClientRect()); flash(r);
+  });
+}
+function scrollToFinding(id, quiet) {
+  var f = findingById(id); if (!f) return;
+  var b = document.querySelector('#contractText .hl[data-fid="' + id + '"]');
+  if (b) scrollToRect(b.getBoundingClientRect());
+  else jumpRange(f.quote.start, f.quote.end);
+}
+
+/* ---- detail ---- */
+function renderDetail() {
+  var z = $('detailZone'); z.replaceChildren();
+  var f = state.selectedId ? findingById(state.selectedId) : null;
+  var wrap = el('div', { cls: 'detail' });
+  if (!f) {
+    wrap.appendChild(backRow());
+    wrap.appendChild(el('p', { cls: 'lead', text: 'Select a finding to see why it matters.' }));
+    z.appendChild(wrap); return;
+  }
+  var cls = 'sev-' + f.severity, rev = state.reviewed.has(f.id), total = openFindings().length;
+  wrap.className = 'detail ' + cls;
+  wrap.appendChild(backRow());
+  var head = el('div', { cls: 'd-head' }, [
+    el('span', { cls: 'num', text: '#' + f.rank + ' of ' + state.findings.length }),
+    badge(f.severity), el('span', { cls: 'chip', text: f.dcat }),
+    el('span', { cls: 'sc', text: f.score + '/100' })]);
+  wrap.appendChild(head);
+  if (f.mitigation < 0) wrap.appendChild(el('p', { cls: 'd-sub num', text: 'Base ' + f.baseScore + ', mitigations ' + f.mitigation }));
+  var h3 = el('h3', { text: f.ctitle, attrs: { id: 'detailTitle', tabindex: '-1' } });
+  wrap.appendChild(h3);
+  if (f.heading) wrap.appendChild(el('p', { cls: 'flag', text: 'Flagged as: ' + f.title }));
+  // matched text
+  wrap.appendChild(el('h4', { text: 'Matched text' }));
+  wrap.appendChild(el('blockquote', { cls: 'quote', text: f.quote.text }));
+  var qa = el('div', { cls: 'qacts' }, [
+    el('button', { cls: 'tbtn show-btn-d', text: 'Jump to clause', attrs: { type: 'button' }, on: { click: function () { scrollToFinding(f.id, false); if (isMobile()) { setTab('contract', false); setTimeout(function () { scrollToFinding(f.id, false); }, 60); } } } })]);
+  if (f.locator) qa.appendChild(el('span', { text: f.locator }));
+  wrap.appendChild(qa);
+  wrap.appendChild(el('h4', { text: 'Why it matters' }));
+  wrap.appendChild(el('p', { text: f.why }));
+  if (f.aggravatorsFound.length) {
+    var ul = el('ul', { cls: 'fine' }); f.aggravatorsFound.forEach(function (a) { ul.appendChild(el('li', { text: a.reason + ' (+' + a.delta + ')' })); });
+    wrap.appendChild(el('p', { cls: 'label-s', text: 'Raised this score' })); wrap.appendChild(ul);
+  }
+  wrap.appendChild(el('h4', { text: 'Suggested fix' }));
+  wrap.appendChild(el('p', { cls: 'label-s', text: 'Suggested starting point' }));
+  wrap.appendChild(el('p', { text: f.fix }));
+  wrap.appendChild(el('h4', { text: 'Jurisdiction note' }));
+  var gl = state.result.governingLaw;
+  wrap.appendChild(el('p', { text: 'General information, verify locally. ' + (gl ? 'Contract states: ' + gl + '.' : 'No governing-law clause found.') + (f.jurisdictionNote ? ' ' + f.jurisdictionNote : '') }));
+  wrap.appendChild(el('h4', { text: 'Mitigating factors found' }));
+  if (!f.mitigatorsFound.length) wrap.appendChild(el('p', { text: 'None found in this contract.' }));
+  else {
+    var ml = el('ul');
+    f.mitigatorsFound.forEach(function (m) {
+      ml.appendChild(el('li', {}, [el('span', { cls: 'mitq', text: '“' + trunc(m.text, 90) + '”' }), ' ',
+        el('button', { cls: 'tbtn', text: 'Jump', attrs: { type: 'button', 'aria-label': 'Jump to mitigating text: ' + trunc(m.text, 40) }, on: { click: function () { jumpRange(m.start, m.end); } } })]));
+    });
+    wrap.appendChild(ml);
+  }
+  if (f.alsoMatches && f.alsoMatches.length) {
+    wrap.appendChild(el('p', { cls: 'fine', text: 'This clause also matched: ' + f.alsoMatches.map(ruleTitle).join('; ') + '.' }));
+  }
+  var foot = el('div', { cls: 'sticky-foot' }, [
+    el('button', { cls: 'btn', text: rev ? 'Reviewed' : 'Mark reviewed', attrs: { type: 'button', 'aria-pressed': rev ? 'true' : 'false', id: 'btnReview' }, on: { click: function () { toggleReviewed(f.id); } } }),
+    el('button', { cls: 'btn', text: 'Dismiss', attrs: { type: 'button', id: 'btnDismiss' }, on: { click: function () { dismissFinding(f.id); } } }),
+    el('button', { cls: 'btn show-btn', text: 'Show in contract', attrs: { type: 'button' }, on: { click: function () { showInContract(f.id); } } }),
+    el('span', { cls: 'status', text: 'Status: ' + (rev ? 'Reviewed' : 'Open') })
+  ]);
+  wrap.appendChild(foot);
+  z.appendChild(wrap);
+  if (isMobile() && state.mobileDetail && z.dataset.focusNext === '1') { z.dataset.focusNext = ''; h3.focus({ preventScroll: true }); }
+}
+function ruleTitle(id) { for (var i = 0; i < TAX.rules.length; i++) if (TAX.rules[i].id === id) return TAX.rules[i].title; return id; }
+function backRow() {
+  var b = el('button', { cls: 'btn back-btn', text: '< All findings', attrs: { type: 'button' }, on: { click: closeMobileDetail } });
+  return el('div', { attrs: { style: 'margin-bottom:8px' } }, [b]);
+}
+
+/* ---- review / dismiss ---- */
+function toggleReviewed(id) {
+  if (state.reviewed.has(id)) state.reviewed.delete(id); else state.reviewed.add(id);
+  renderSummary(); renderList(); renderContract(); renderDetail(); renderPeek();
+  var btn = $('btnReview'); if (btn) btn.focus();
+  announce(state.reviewed.has(id) ? 'Marked reviewed.' : 'Review mark removed.');
+}
+function dismissFinding(id) {
+  var vis = visibleFindings(), i = vis.findIndex(function (f) { return f.id === id; });
+  var next = vis[i + 1] || vis[i - 1] || null;
+  state.dismissed.add(id);
+  var wasSelected = state.selectedId === id;
+  if (wasSelected) state.selectedId = next ? next.id : null;
+  ensureSelection();
+  renderSummary(); renderFilters(); renderList(); renderContract(); renderDetail(); renderQc(); renderPeek();
+  if (isMobile() && state.mobileDetail && !state.selectedId) closeMobileDetail();
+  var row = state.selectedId && $('row-' + state.selectedId);
+  if (row && !isMobile()) { row.focus(); }
+  else if (!row && !isMobile()) { $('resultsHead').focus(); }
+  toast('Dismissed.', 'Undo', function () { restoreFinding(id, true); });
+  announce('Dismissed. Undo available for 6 seconds.');
+}
+function restoreFinding(id, fromUndo) {
+  state.dismissed.delete(id);
+  renderSummary(); renderFilters(); renderList(); renderContract(); renderDetail(); renderPeek();
+  announce('Finding restored.');
+  var row = $('row-' + id); if (row && !isMobile()) row.focus();
+}
+
+/* ---- mobile ---- */
+function setTab(name, quiet) {
+  document.body.dataset.tab = name;
+  ['contract', 'findings'].forEach(function (t) {
+    var b = $('tab-' + t); b.setAttribute('aria-selected', t === name ? 'true' : 'false'); b.tabIndex = t === name ? 0 : -1;
+  });
+  if (name === 'contract') { state.mobileDetail = false; document.body.dataset.mdetail = '0'; }
+  renderPeek();
+}
+$('tabs').addEventListener('click', function (e) { var b = e.target.closest('[role=tab]'); if (b) setTab(b.id.replace('tab-', ''), false); });
+$('tabs').addEventListener('keydown', function (e) {
+  var order = ['contract', 'findings'], cur = document.body.dataset.tab, i = order.indexOf(cur);
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') {
+    e.preventDefault();
+    var n = e.key === 'Home' ? 0 : e.key === 'End' ? 1 : (i + (e.key === 'ArrowRight' ? 1 : 1)) % 2;
+    setTab(order[n]); $('tab-' + order[n]).focus();
+  }
+});
+function openMobileDetail() {
+  setTab('findings', true);
+  state.mobileDetail = true; document.body.dataset.mdetail = '1';
+  $('detailZone').dataset.focusNext = '1';
+  renderDetail();
+  var h = $('detailTitle'); if (h) h.focus({ preventScroll: true });
+  window.scrollTo(0, 0);
+}
+function closeMobileDetail() {
+  var id = state.selectedId;
+  state.mobileDetail = false; document.body.dataset.mdetail = '0';
+  var row = id && $('row-' + id);
+  if (row) { row.focus(); row.scrollIntoView({ block: 'nearest' }); }
+}
+function showInContract(id) {
+  setTab('contract', false);
+  requestAnimationFrame(function () { scrollToFinding(id, false); var b = document.querySelector('#contractText .hl[data-fid="' + id + '"]'); if (b) b.focus({ preventScroll: true }); });
+}
+function renderPeek() {
+  var p = $('peek'); p.replaceChildren();
+  var f = state.selectedId ? findingById(state.selectedId) : null;
+  var show = isMobile() && state.peekOpen && f && document.body.dataset.tab === 'contract' && (state.mode === 'results');
+  p.classList.toggle('on', !!show);
+  if (!show) return;
+  p.className = 'peek on sev-' + f.severity;
+  p.appendChild(badge(f.severity));
+  p.appendChild(el('div', { cls: 'ptxt' }, [el('div', { cls: 'pcat', text: f.dcat }), el('div', { cls: 'ptit', text: f.ctitle })]));
+  p.appendChild(el('button', { cls: 'btn primary', text: 'Details', attrs: { type: 'button' }, on: { click: function () { openMobileDetail(); } } }));
+}
+var sheetOpener = null;
+$('btnFilter').addEventListener('click', function () { sheetOpener = this; $('filtersZone').classList.add('sheet'); $('sheetBackdrop').classList.add('on'); $('filtersZone').setAttribute('role', 'dialog'); $('filtersZone').setAttribute('aria-label', 'Filter findings'); $('filtersZone').setAttribute('aria-modal', 'true'); var f = $('filtersZone').querySelector('button:not(.sheet-close)'); (f || $('btnSheetClose')).focus(); });
+function closeSheet() {
+  $('filtersZone').classList.remove('sheet'); $('sheetBackdrop').classList.remove('on');
+  $('filtersZone').removeAttribute('role'); $('filtersZone').removeAttribute('aria-label'); $('filtersZone').removeAttribute('aria-modal');
+  if (sheetOpener) { sheetOpener.focus(); sheetOpener = null; }
+}
+$('btnSheetClose').addEventListener('click', closeSheet);
+$('sheetBackdrop').addEventListener('click', closeSheet);
+function applyLayout() {
+  var m = isMobile(), c = $('contractSection'), a = $('findingsAside');
+  if (m) {
+    c.setAttribute('role', 'tabpanel'); c.setAttribute('aria-labelledby', 'tab-contract');
+    a.setAttribute('role', 'tabpanel'); a.setAttribute('aria-labelledby', 'tab-findings');
+  } else {
+    c.removeAttribute('role'); c.removeAttribute('aria-labelledby'); a.removeAttribute('role'); a.removeAttribute('aria-labelledby');
+    closeSheet(); state.mobileDetail = false; document.body.dataset.mdetail = '0';
+  }
+  if (state.result) renderPeek();
+}
+if (mqMobile.addEventListener) mqMobile.addEventListener('change', applyLayout); else mqMobile.addListener(applyLayout);
+
+/* ================= export ================= */
+var menu = $('exportMenu'), btnExport = $('btnExport');
+function openMenu() { menu.hidden = false; btnExport.setAttribute('aria-expanded', 'true'); $('miPrint').focus(); }
+function closeMenu() { if (menu.hidden) return; menu.hidden = true; btnExport.setAttribute('aria-expanded', 'false'); }
+btnExport.addEventListener('click', function () { menu.hidden ? openMenu() : closeMenu(); });
+menu.addEventListener('keydown', function (e) {
+  var items = [$('miPrint'), $('miCopy')], i = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % 2].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i + 1) % 2].focus(); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeMenu(); btnExport.focus(); }
+  else if (e.key === 'Tab') closeMenu();
+});
+document.addEventListener('click', function (e) { if (!e.target.closest('.menu-wrap')) closeMenu(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    if ($('filtersZone').classList.contains('sheet')) closeSheet();
+    else if (!menu.hidden) { closeMenu(); btnExport.focus(); }
+  }
+});
+$('miPrint').addEventListener('click', function () { closeMenu(); buildPrint(); window.print(); });
+window.addEventListener('beforeprint', buildPrint);
+$('miCopy').addEventListener('click', function () { closeMenu(); copyMarkdown(); });
+
+function today() { return new Date().toISOString().slice(0, 10); }
+function mdEsc(s) { return String(s).replace(/[\\`*_{}\[\]()#+!|<>~]/g, '\\$&').replace(/^(\s*)-/gm, '$1\\-'); }
+function mdQuote(s) { return '> ' + mdEsc(s).replace(/\s*\n\s*/g, '\n> '); }
+function groupsLabel() {
+  var g = (state.result && state.result.groups) || state.groups || ['core', 'extra'];
+  var names = { core: 'core contract risks', extra: 'additional contract risks', engagement: 'engagement-letter terms' };
+  return g.map(function (x) { return names[x] || x; }).join(', ');
+}
+function buildMarkdown() {
+  var open = openFindings(), s = summaryCounts(), nrev = open.filter(function (f) { return state.reviewed.has(f.id); }).length;
+  var L = [];
+  L.push('# Red Flag & Risk Detector report', '', 'Date: ' + today(), '', '> ' + DISCLAIMER, '> Assumes you are the customer or client.', '');
+  L.push('Rule groups checked: ' + groupsLabel() + '.', '');
+  L.push('## Summary', '', plural(s.total, 'finding') + ': ' + s.High + ' High, ' + s.Medium + ' Medium, ' + s.Low + ' Low. ' + nrev + ' of ' + s.total + ' reviewed.', '');
+  if (!open.length) L.push('No clauses matched our risk patterns. That does not mean the contract is risk-free; a lawyer should still review it.', '');
+  var gl = state.result.governingLaw;
+  open.forEach(function (f) {
+    var rev = state.reviewed.has(f.id);
+    L.push('### ' + f.rank + '. [' + f.severity.toUpperCase() + '] ' + f.dcat + ': ' + mdEsc(f.ctitle), '');
+    L.push('Score: ' + f.score + '/100' + (f.mitigation < 0 ? ' (Base ' + f.baseScore + ', mitigations ' + f.mitigation + ')' : '') + (f.locator ? ' | ' + mdEsc(f.locator) : ''), '');
+    L.push(mdQuote(f.quote.text), '');
+    L.push('**Why it matters:** ' + f.why, '');
+    L.push('**Suggested starting point:** ' + f.fix, '');
+    L.push('**Jurisdiction:** General information, verify locally. ' + (gl ? 'Contract states: ' + mdEsc(gl) + '.' : 'No governing-law clause found.') + (f.jurisdictionNote ? ' ' + f.jurisdictionNote : ''), '');
+    if (f.mitigatorsFound.length) { L.push('**Mitigating factors found:**'); f.mitigatorsFound.forEach(function (m) { L.push('- "' + mdEsc(trunc(m.text, 120)) + '"'); }); L.push(''); }
+    else L.push('**Mitigating factors found:** None found in this contract.', '');
+    L.push('**Status:** ' + (rev ? 'Reviewed' : 'Open'), '');
+  });
+  var qc = state.result.qc;
+  if (qc.length) { L.push('## Not found in this contract', ''); qc.forEach(function (q) { L.push('- ' + q.title + '. ' + q.message); }); L.push(''); }
+  L.push('---', 'Generated by Red Flag & Risk Detector on ' + today() + '. For lawyer review, not legal advice.');
+  return L.join('\n');
+}
+async function copyMarkdown() {
+  var md = buildMarkdown(), ok = false;
+  try { await navigator.clipboard.writeText(md); ok = true; } catch (e) { ok = false; }
+  if (ok) { announce('Report copied as Markdown.'); toast('Report copied as Markdown.'); return; }
+  var d = $('mdDlg'), ta = $('mdText'); ta.value = md;
+  $('mdClose').onclick = function () { d.close(); btnExport.focus(); };
+  d.showModal(); ta.focus(); ta.select();
+}
+function buildPrint() {
+  var root = $('printReport'); root.replaceChildren();
+  if (!state.result) return;
+  var open = openFindings(), s = summaryCounts(), gl = state.result.governingLaw;
+  root.appendChild(el('div', { cls: 'pr-disc', text: DISCLAIMER + ' Assumes you are the customer or client.' }));
+  root.appendChild(el('h1', { text: 'Red Flag & Risk Detector report' }));
+  root.appendChild(el('p', { text: 'Rule groups checked: ' + groupsLabel() + '.' }));
+  root.appendChild(el('p', { text: today() + ' · ' + plural(s.total, 'finding') + ': ' + s.High + ' High, ' + s.Medium + ' Medium, ' + s.Low + ' Low.' }));
+  if (!open.length) root.appendChild(el('p', { text: 'No clauses matched our risk patterns. That does not mean the contract is risk-free; a lawyer should still review it.' }));
+  open.forEach(function (f) {
+    var rev = state.reviewed.has(f.id), box = el('div', { cls: 'pr-find sev-' + f.severity });
+    box.appendChild(el('div', {}, [badge(f.severity), ' ', el('span', { cls: 'chip', text: '#' + f.rank + ' ' + f.dcat }), ' ', el('span', { cls: 'num', text: f.score + '/100' + (f.mitigation < 0 ? ' (Base ' + f.baseScore + ', mitigations ' + f.mitigation + ')' : '') })]));
+    box.appendChild(el('h3', { text: f.ctitle }));
+    box.appendChild(el('blockquote', { text: f.quote.text }));
+    box.appendChild(el('p', {}, [el('b', { text: 'Why it matters: ' }), f.why]));
+    box.appendChild(el('p', {}, [el('b', { text: 'Suggested starting point: ' }), f.fix]));
+    box.appendChild(el('p', {}, [el('b', { text: 'Jurisdiction: ' }), 'General information, verify locally. ' + (gl ? 'Contract states: ' + gl + '.' : 'No governing-law clause found.') + (f.jurisdictionNote ? ' ' + f.jurisdictionNote : '')]));
+    var mt = f.mitigatorsFound.length ? f.mitigatorsFound.map(function (m) { return '“' + trunc(m.text, 90) + '”'; }).join('; ') : 'None found in this contract.';
+    box.appendChild(el('p', {}, [el('b', { text: 'Mitigating factors found: ' }), mt]));
+    box.appendChild(el('p', {}, [el('b', { text: 'Status: ' }), rev ? 'Reviewed' : 'Open']));
+    root.appendChild(box);
+  });
+  if (state.result.qc.length) {
+    root.appendChild(el('h2', { text: 'Not found in this contract' }));
+    var ul = el('ul'); state.result.qc.forEach(function (q) { ul.appendChild(el('li', { text: q.title + '. ' + q.message })); }); root.appendChild(ul);
+  }
+  root.appendChild(el('h2', { text: 'Contract text with highlights' }));
+  var c = el('div', { cls: 'contract' }); buildContract(c, state.text, open, 'print', null); root.appendChild(c);
+  root.appendChild(el('p', { cls: 'fine', text: 'Generated by Red Flag & Risk Detector on ' + today() + '. For lawyer review, not legal advice.' }));
+}
+
+/* ================= init ================= */
+$('skipContract').addEventListener('click', function (e) { e.preventDefault(); if (isMobile()) setTab('contract'); var t = state.mode === 'input' ? src : $('contractSection'); t.focus(); });
+$('skipFindings').addEventListener('click', function (e) {
+  e.preventDefault();
+  if (state.mode === 'input') { src.focus(); return; }
+  if (isMobile()) setTab('findings');
+  var l = $('list').querySelector('[tabindex="0"]') || $('findingsAside'); if (l.focus) l.focus();
+});
+applyLayout();
+setMode('input');
+updateInputMeta();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Red Flag &amp; Risk Detector</title>
+<style>
+:root{
+  --bg:#F6F7F9;--surface:#FFFFFF;--ink:#1B2430;--muted:#4A5565;--border:#C9CFD8;--ctl:#8A94A3;--focus:#0B57D0;
+  --sev-high-fg:#A3202F;--sev-high-bg:#FBE6E8;--sev-high-ln:#C23A48;
+  --sev-med-fg:#7A4300;--sev-med-bg:#FCEFD6;--sev-med-ln:#B86E00;
+  --sev-low-fg:#1D5A85;--sev-low-bg:#E4F0F8;--sev-low-ln:#3E7FAE;
+  --ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ctl-h:36px;--ease:cubic-bezier(.2,0,0,1);
+}
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.5rem var(--ui);-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:absolute;left:8px;top:-60px;z-index:100;background:var(--surface);border:1px solid var(--ctl);border-radius:4px;padding:8px 12px;color:var(--ink);font-size:.875rem}
+.skip:focus{top:8px}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono)}
+
+/* severity tokens */
+.sev-High{--fg:var(--sev-high-fg);--bg:var(--sev-high-bg);--ln:var(--sev-high-ln)}
+.sev-Medium{--fg:var(--sev-med-fg);--bg:var(--sev-med-bg);--ln:var(--sev-med-ln)}
+.sev-Low{--fg:var(--sev-low-fg);--bg:var(--sev-low-bg);--ln:var(--sev-low-ln)}
+.ico{display:inline-block;width:16px;height:16px;flex:none;vertical-align:-3px}
+.badge{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;background:var(--bg);border:1px solid var(--ln);border-radius:4px;color:var(--fg);font-size:.8125rem;line-height:1.125rem;font-weight:600;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:4px;min-height:24px;padding:0 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);font-size:.8125rem;font-weight:600;color:var(--ink)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:var(--ctl-h);padding:0 14px;border:1px solid var(--ctl);border-radius:4px;background:var(--surface);color:var(--ink);font-size:.875rem;font-weight:500;cursor:pointer;transition:background-color 120ms var(--ease)}
+.btn:hover{background:#EEF1F5}
+.btn[aria-pressed=true]{background:#E8EEF9;border-color:var(--focus);color:#0A3D91}
+.btn.primary{background:var(--focus);border-color:var(--focus);color:#fff;font-weight:600}
+.btn.primary:hover{background:#0A4CB5}
+.btn[disabled]{background:#EEF0F3;border-color:var(--border);color:#5B6573;cursor:not-allowed}
+.btn.link{border:0;background:none;color:var(--focus);padding:0 4px;min-height:var(--ctl-h);text-decoration:underline}
+.btn.link:hover{background:none;color:#0A3D91}
+.tbtn{border:0;background:none;color:var(--focus);text-decoration:underline;cursor:pointer;font-size:.875rem;padding:6px 4px;min-height:32px}
+@media (max-width:1023.98px),(pointer:coarse){:root{--ctl-h:44px}.tbtn{min-height:44px}}
+
+/* app shell */
+.app{display:flex;flex-direction:column;min-height:100vh}
+header.top{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 24px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap}
+header.top h1{margin:0;font-size:1.125rem;line-height:1.5rem;font-weight:600;flex:1 1 auto}
+header.top .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.disc{background:#EEF0F3;border-bottom:1px solid var(--border);padding:8px 24px;font-size:.8125rem;line-height:1.125rem;font-weight:600;min-height:36px;display:flex;align-items:center}
+main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+
+/* export menu */
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 4px);z-index:50;min-width:210px;background:var(--surface);border:1px solid var(--ctl);border-radius:8px;padding:4px}
+.menu button{display:block;width:100%;text-align:left;min-height:var(--ctl-h);padding:0 12px;border:0;background:none;border-radius:4px;font-size:.875rem;cursor:pointer}
+.menu button:hover,.menu button:focus-visible{background:#EEF1F5}
+
+/* input view */
+.input-wrap{width:100%;max-width:720px;margin:0 auto;padding:32px 24px 48px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px}
+.input-title{margin:0 0 8px;font-size:1.75rem;line-height:2.25rem;font-weight:600}
+.lead{margin:0 0 16px;color:var(--muted)}
+label.fl{display:block;margin:0 0 4px;font-size:.875rem;font-weight:600}
+textarea#src{width:100%;min-height:calc(12 * 1.5rem + 24px);padding:12px;border:1px solid var(--ctl);border-radius:4px;background:#fff;font:400 1rem/1.5rem var(--ui);resize:vertical}
+.meta-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.75rem;line-height:1rem;font-weight:500;color:var(--muted);margin-top:4px}
+.drop{margin-top:16px;padding:16px;border:1px dashed var(--ctl);border-radius:8px;background:#FAFBFC;display:flex;flex-direction:column;gap:8px;align-items:flex-start;font-size:.875rem}
+.drop.over{border:2px solid var(--focus);background:#EEF4FD}
+.filechip{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:2px 4px 2px 10px;border:1px solid var(--border);border-radius:4px;font-size:.8125rem;font-weight:600;background:var(--surface)}
+.notice{display:flex;gap:8px;align-items:flex-start;margin-top:12px;padding:10px 12px;background:var(--surface);border:1px solid var(--ctl);border-radius:8px;font-size:.875rem;line-height:1.25rem}
+.notice .ico{margin-top:2px}
+.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.fine{font-size:.8125rem;line-height:1.125rem;color:var(--muted);margin:12px 0 0}
+
+/* layout of results */
+.panes{flex:1 1 auto;min-height:0;display:block}
+#contractSection{min-width:0}
+.contract-scroll{padding:24px 16px 48px}
+.contract-inner{max-width:68ch;margin:0 auto}
+#contractText{font:400 1.0625rem/1.7rem var(--serif);white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
+.contract-foot{max-width:68ch;margin:24px auto 0;font-size:.75rem;line-height:1rem;font-weight:500;color:var(--muted);border-top:1px solid var(--border);padding-top:8px}
+#analyzing .skel,.skel{background:#E3E7ED;border-radius:4px}
+body[data-mode=analyzing] #contractText{opacity:.6}
+
+/* highlights */
+span.hl{font:inherit;color:inherit;text-align:inherit;background:var(--bg);border:0;padding:0;margin:0;cursor:pointer;white-space:inherit;text-decoration-line:underline;text-decoration-color:var(--ln);text-decoration-thickness:2px;text-underline-offset:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone;scroll-margin-block:96px;transition:outline-color 120ms var(--ease)}
+span.hl.sev-Medium{text-decoration-style:dashed}
+span.hl.sev-Low{text-decoration-style:dotted}
+span.hl:hover{text-decoration-thickness:3px}
+span.hl[aria-current=true]{outline:2px solid var(--focus);outline-offset:2px}
+span.hl:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+span.hl.reviewed{background:transparent}
+.hl-mark{display:inline-flex;align-items:center;gap:2px;margin-left:4px;padding:0 4px;border-radius:3px;background:var(--bg);color:var(--fg);font:700 .75rem/1rem var(--ui);text-decoration:none;white-space:nowrap;vertical-align:baseline;-webkit-user-select:none;user-select:none}
+.hl-mark .ico{width:12px;height:12px;vertical-align:-2px}
+.hl-mark .lbl{display:none}
+span.hl[aria-current=true] .hl-mark{box-shadow:0 0 0 1px var(--focus)}
+::highlight(rfd-jump){background:#D6E4FB}
+
+/* findings panel pieces */
+.results-h{margin:0;font-size:1.375rem;line-height:1.75rem;font-weight:600}
+.results-h:focus{outline:none}
+.results-h:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.sumcard{padding:12px 24px 8px;border-bottom:1px solid var(--border);background:var(--surface)}
+.sumline{margin:4px 0 0;font-size:.875rem;line-height:1.25rem}
+.sumline strong{font-weight:600}
+.subline{margin:2px 0 0;font-size:.8125rem;line-height:1.125rem;color:var(--muted)}
+.filters{padding:4px 24px 8px;background:var(--surface);border-bottom:1px solid var(--border)}
+.fgroup{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.fgroup .btn{min-height:var(--ctl-h);padding:0 10px;font-size:.8125rem;font-weight:600}
+.fgroup.cats .btn{font-weight:500}
+.fcount{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:500}
+.fstat{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.8125rem;color:var(--muted);min-height:24px}
+.flabel{font-size:.75rem;line-height:1rem;font-weight:600;color:var(--muted);margin:8px 0 0}
+.list{margin:0;padding:0;list-style:none}
+.row{display:grid;grid-template-columns:auto auto 1fr auto;grid-template-areas:"rank badge cat score" "title title title title";gap:2px 8px;align-items:center;min-height:56px;padding:8px 24px;border-bottom:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:.875rem;line-height:1.25rem;position:relative}
+.row:hover{background:#F1F4F8}
+.row[aria-selected=true]{background:#EAF1FC;box-shadow:inset 3px 0 0 var(--focus)}
+.row .rank{grid-area:rank;font-weight:600;min-width:2ch}
+.row .badge{grid-area:badge}
+.row .cat{grid-area:cat;color:var(--muted);font-size:.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .score{grid-area:score;font:500 .8125rem var(--mono);color:var(--ink)}
+.row .ttl{grid-area:title;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.row.done .ttl{color:var(--muted);font-weight:400}
+.row .st{font-size:.75rem;color:var(--muted);font-weight:600}
+.empty-msg{padding:24px;color:var(--muted)}
+details.more{border-top:1px solid var(--border);background:var(--surface)}
+details.more>summary{cursor:pointer;padding:10px 24px;font-size:.875rem;font-weight:600;min-height:var(--ctl-h)}
+details.more .row{cursor:default}
+details.more .row:hover{background:var(--surface)}
+.qc-item{padding:8px 24px;border-top:1px solid var(--border);font-size:.8125rem;line-height:1.125rem}
+.qc-item b{font-weight:600}
+.restore{grid-column:1/-1}
+
+/* detail */
+.detail{padding:16px 24px 0;animation:fade 200ms var(--ease)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.d-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.875rem}
+.d-head .sc{margin-left:auto;font:600 .875rem var(--mono)}
+.d-sub{margin:4px 0 0;font-size:.75rem;line-height:1rem;color:var(--muted);text-align:right}
+.detail h3{margin:12px 0 0;font-size:1.125rem;line-height:1.5rem;font-weight:600;overflow-wrap:anywhere}
+.detail h3:focus{outline:none}
+.detail h4{margin:16px 0 4px;font-size:.75rem;line-height:1rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.detail p{margin:0 0 8px}
+.detail ul{margin:0;padding-left:20px}
+.detail li{margin:0 0 4px}
+.flag{font-size:.8125rem;color:var(--muted);margin:2px 0 0}
+blockquote.quote{margin:0;padding:8px 12px;background:var(--bg);border-left:3px solid var(--ln);font:400 1.0625rem/1.7rem var(--serif);overflow-wrap:anywhere;white-space:pre-wrap}
+.qacts{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:4px;font-size:.8125rem;color:var(--muted)}
+.label-s{font-size:.8125rem;font-weight:600}
+.mitq{font-family:var(--serif);font-size:.9375rem}
+.sticky-foot{position:sticky;bottom:0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px -24px 0;padding:12px 24px;background:var(--surface);border-top:1px solid var(--border)}
+.status{margin-left:auto;font-size:.8125rem;font-weight:600;color:var(--muted)}
+.back-btn,.show-btn{display:none}
+
+/* skeleton */
+#skeleton{padding:24px}
+.skel{height:16px;margin:0 0 12px}
+.skel.row-s{height:40px}
+.bar{position:relative;height:4px;overflow:hidden;background:#E3E7ED;border-radius:2px;margin:12px 0}
+.bar::after{content:"";position:absolute;inset:0 auto 0 0;width:30%;background:var(--focus);animation:slide 1.2s infinite var(--ease)}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+
+/* error panel */
+.errpanel{margin-bottom:16px;padding:16px;background:var(--surface);border:1px solid var(--ctl);border-radius:8px}
+.errpanel h2{margin:0 0 4px;font-size:1.375rem;line-height:1.75rem;font-weight:600}
+.errpanel .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.inline-err{margin-top:8px;display:flex;gap:8px;font-size:.875rem;padding:8px 12px;border:1px solid var(--ctl);border-radius:4px;background:var(--surface)}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px;background:var(--ink);color:#fff;border-radius:8px;font-size:.875rem;max-width:calc(100vw - 32px)}
+.toast .tbtn{color:#C9DCFB;padding:4px 8px}
+
+dialog{border:1px solid var(--ctl);border-radius:8px;padding:24px;max-width:min(560px,calc(100vw - 32px));color:var(--ink);background:var(--surface)}
+dialog::backdrop{background:rgb(27 36 48 / .4)}
+dialog h2{margin:0 0 8px;font-size:1.375rem;line-height:1.75rem}
+dialog textarea{width:100%;min-height:200px;font:400 .8125rem/1.25rem var(--mono);padding:8px;border:1px solid var(--ctl);border-radius:4px}
+dialog .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* mode switching */
+#analyzing,#resultsHead,.stripwrap,.tabs,.peek,#printReport,#sheetBackdrop{display:none}
+body[data-mode=input] #findingsAside{display:none}
+body[data-mode=input] #inputView{display:block}
+body:not([data-mode=input]) #inputView{display:none}
+body[data-mode=input] #contractSection{display:none}
+body[data-mode=input] header .res-only{display:none}
+body[data-mode=analyzing] header .res-only{display:none}
+body[data-mode=analyzing] #findingsAside>:not(#analyzing){display:none}
+body[data-mode=analyzing] #analyzing{display:block}
+body[data-mode=zero] #listZone,body[data-mode=zero] #detailZone,body[data-mode=zero] #filtersZone{display:none}
+body[data-mode=zero] #zeroMsg{display:block}
+#zeroMsg{display:none;padding:16px 24px}
+#zeroMsg h2{margin:0 0 4px;font-size:1.375rem;line-height:1.75rem;font-weight:600}
+
+/* desktop */
+@media (min-width:1024px){
+  body{overflow:hidden}
+  .app{height:100vh;height:100dvh;min-height:0}
+  .panes{display:flex}
+  main{overflow:hidden}
+  body[data-mode=input] main{overflow:auto}
+  #contractSection{flex:1 1 auto;min-width:480px;overflow:auto;background:var(--bg)}
+  .contract-scroll{padding:24px 32px 48px}
+  #findingsAside{flex:0 0 clamp(400px,36vw,520px);width:clamp(400px,36vw,520px);display:flex;flex-direction:column;min-height:0;border-left:1px solid var(--border);background:var(--surface)}
+  #zoneA{flex:none}
+  #listZone{flex:1 0 160px;min-height:160px;overflow:auto}
+  #detailZone{flex:0 1 50%;min-height:180px;overflow:auto;border-top:1px solid var(--border);position:relative}
+  body[data-mode=zero] #findingsAside{overflow:auto}
+  .tabs,.stripwrap,.peek{display:none!important}
+  .fgroup.cats{max-height:80px;overflow:auto}
+  #findingsAside{overflow:hidden}
+  .flt-open,.sheet-close{display:none}
+}
+@media (min-width:1024px) and (max-height:719.98px){#detailZone{flex-basis:60%;min-height:100px}.flabel,#sumAssume{display:none}.fgroup.cats{max-height:40px}.fgroup{margin-top:4px}.sumcard{padding-top:8px}.results-h{font-size:1.125rem;line-height:1.5rem}}
+@media (min-width:1024px){body[data-mode=results] #resultsHead,body[data-mode=zero] #resultsHead{display:block}}
+
+/* tablet / mobile */
+@media (max-width:1023.98px){
+  header.top,.disc{padding-left:16px;padding-right:16px}
+  .app{min-height:100vh}
+  body[data-mode=results] .stripwrap,body[data-mode=zero] .stripwrap{display:block}
+  body[data-mode=results] .tabs,body[data-mode=zero] .tabs{display:flex}
+  .stripwrap{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 16px}
+  .stripwrap .results-h{font-size:1.125rem}
+  .strip{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+  .tabs{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border)}
+  .tabs [role=tab]{flex:1;min-height:44px;border:0;border-bottom:3px solid transparent;background:none;font-size:.875rem;font-weight:600;cursor:pointer;color:var(--muted)}
+  .tabs [role=tab][aria-selected=true]{border-bottom-color:var(--focus);color:var(--ink)}
+  .panes{display:block}
+  body[data-tab=findings] #contractSection{display:none}
+  body[data-tab=contract] #findingsAside{display:none}
+  body[data-mode=analyzing] #findingsAside{display:block}
+  .contract-scroll{padding:16px}
+  .contract-inner,.contract-foot{max-width:720px}
+  #findingsAside{max-width:720px;margin:0 auto;width:100%;background:var(--surface)}
+  #resultsHead{display:none!important}
+  .sumcard,.filters,.row,.detail,.qc-item,#zeroMsg,details.more>summary{padding-left:16px;padding-right:16px}
+  .sticky-foot{margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+  .back-btn,.show-btn{display:inline-flex}
+  body[data-mdetail="1"] #zoneA,body[data-mdetail="1"] #listZone{display:none}
+  body:not([data-mdetail="1"]) #detailZone{display:none}
+  .filters{display:none}
+  .filters.sheet{display:block;position:fixed;left:0;right:0;bottom:0;z-index:60;max-height:70vh;overflow:auto;box-shadow:0 -4px 16px rgb(27 36 48 / .12);border-top:1px solid var(--ctl);border-radius:8px 8px 0 0;max-width:720px;margin:0 auto;padding-top:12px}
+  #sheetBackdrop.on{display:block;position:fixed;inset:0;z-index:55;background:rgb(27 36 48 / .35)}
+  .peek.on{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;min-height:96px;padding:12px 16px;gap:12px;align-items:center;background:var(--surface);border-top:1px solid var(--ctl);flex-wrap:wrap}
+  .peek .ptxt{flex:1 1 200px;min-width:0}
+  .peek .ptit{font-size:.875rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .peek .pcat{font-size:.8125rem;color:var(--muted)}
+  .menu{right:0}
+  .toast{bottom:112px}
+}
+@media (min-width:1024px){.flt-open{display:none!important}}
+@media (max-width:1023.98px){.flt-open{display:inline-flex}}
+@media (max-width:479.98px){.row{grid-template-columns:auto auto 1fr auto}.input-wrap{padding:16px 16px 32px}.card{padding:16px}.input-title{font-size:1.5rem;line-height:2rem}}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+  .bar{display:none}
+}
+@media (forced-colors:active){
+  span.hl{forced-color-adjust:none;color:CanvasText;background:transparent;text-decoration-color:Highlight}
+  .badge,.hl-mark{border:1px solid CanvasText}
+  span.hl[aria-current=true]{outline:3px solid Highlight}
+}
+
+/* print */
+@media print{
+  @page{margin:14mm}
+  html,body{background:#fff!important;height:auto!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#000}
+  .app>*:not(#printReport),.toast,dialog,.skip,#live{display:none!important}
+  #printReport{display:block!important}
+  .pr-disc{border:1px solid #000;padding:6px 10px;font:600 .8125rem/1.125rem var(--ui);margin-bottom:12px}
+  #printReport h1{font-size:1.5rem;margin:0 0 4px}
+  #printReport h2{font-size:1.125rem;margin:20px 0 8px;break-after:avoid}
+  .pr-find{break-inside:avoid;border:1px solid #888;border-radius:4px;padding:8px 12px;margin:0 0 10px}
+  .pr-find h3{margin:6px 0 4px;font-size:1rem}
+  .pr-find p,.pr-find ul{margin:2px 0 6px;font-size:.875rem;line-height:1.25rem}
+  .pr-find blockquote{margin:4px 0;padding:4px 8px;border-left:3px solid #000;font:400 .9375rem/1.4rem var(--serif);white-space:pre-wrap}
+  .pr-find .badge,.pr-find .chip{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #printReport .contract{font:400 .9375rem/1.5rem var(--serif);white-space:pre-wrap;overflow-wrap:anywhere}
+  .hl-p{background:var(--bg);text-decoration-line:underline;text-decoration-color:var(--fg);text-decoration-thickness:2px;text-underline-offset:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .hl-p.sev-Medium{text-decoration-style:dashed}
+  .hl-p.sev-Low{text-decoration-style:dotted}
+  .hl-p.reviewed{background:transparent}
+  .hl-p .hl-mark{display:inline-flex;border:1px solid var(--fg);margin-left:3px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .hl-p .hl-mark .lbl{display:inline}
+}
+.opt-row{margin:12px 0 4px}
+.opt-lbl{display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+.opt-lbl input{width:18px;height:18px;margin:0;flex:none}
+</style>
+</head>
+<body data-mode="input" data-tab="contract">
+<a class="skip" href="#contractSection" id="skipContract">Skip to contract text</a>
+<a class="skip" href="#findingsAside" id="skipFindings">Skip to findings</a>
+<div class="app">
+  <header class="top">
+    <h1>Red Flag &amp; Risk Detector</h1>
+    <div class="acts">
+      <button type="button" class="btn res-only" id="btnEdit">Edit text</button>
+      <button type="button" class="btn res-only" id="btnNew">New contract</button>
+      <div class="menu-wrap res-only">
+        <button type="button" class="btn" id="btnExport" aria-haspopup="menu" aria-expanded="false" aria-controls="exportMenu">Export</button>
+        <div class="menu" id="exportMenu" role="menu" aria-label="Export" hidden>
+          <button type="button" role="menuitem" id="miPrint">Print / Save as PDF</button>
+          <button type="button" role="menuitem" id="miCopy">Copy as Markdown</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <div class="disc" role="note" id="disc">For lawyer review, not legal advice. This tool flags text patterns; it does not interpret your contract or replace an attorney.</div>
+
+  <div class="stripwrap" id="stripWrap">
+    <h2 class="results-h" id="stripHeading" tabindex="-1">Results</h2>
+    <div class="strip" id="strip"></div>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Contract and findings" id="tabs">
+    <button type="button" role="tab" id="tab-contract" aria-selected="true" aria-controls="contractSection" tabindex="0">Contract</button>
+    <button type="button" role="tab" id="tab-findings" aria-selected="false" aria-controls="findingsAside" tabindex="-1">Findings (0)</button>
+  </div>
+
+  <main id="main">
+    <div id="inputView">
+      <div class="input-wrap">
+        <div class="errpanel" id="errPanel" role="alert" hidden>
+          <h2>Analysis stopped</h2>
+          <p style="margin:0" id="errText">We couldn't finish the analysis. Your text is still here and nothing was uploaded.</p>
+          <div class="acts"><button type="button" class="btn primary" id="btnRetry">Try again</button><button type="button" class="btn" id="btnErrEdit">Edit text</button></div>
+        </div>
+        <div class="card">
+          <h2 class="input-title" id="inputTitle">Paste a contract to see what to read first.</h2>
+          <p class="lead">We rank risky clauses High, Medium or Low. Runs in your browser. Nothing is uploaded.</p>
+          <label class="fl" for="src">Contract text</label>
+          <textarea id="src" rows="12" spellcheck="false" aria-describedby="srcMeta srcHint"></textarea>
+          <div class="meta-row"><span id="srcMeta" class="num"></span><span id="srcHint"></span></div>
+          <div class="drop" id="drop">
+            <span id="dropLabel">Drop a .txt, .md or .docx file here, or choose a file.</span>
+            <div><button type="button" class="btn" id="btnChoose">Choose file</button> <input type="file" id="file" accept=".txt,.md,.markdown,.docx" hidden></div>
+            <div id="chipHost"></div>
+            <div id="fileErr" role="alert"></div>
+          </div>
+          <div class="opt-row"><label class="opt-lbl" for="optEng"><input type="checkbox" id="optEng"> <span>Also check engagement-letter terms (retainers, sponsor agreements)</span></label></div>
+          <div class="notice" role="note" id="assumeNotice"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="7.25" y="4" width="1.5" height="5" fill="currentColor"/><circle cx="8" cy="11.3" r=".95" fill="currentColor"/></svg><span>Assumes you are the customer or client (the party receiving the services or paying the fees). Risk ratings would differ from the other side's point of view.</span></div>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btnAnalyze" disabled>Analyze</button>
+            <button type="button" class="btn link" id="btnSample">Load sample contract</button>
+          </div>
+          <p class="fine" id="marksNote" hidden>Analyzing again clears your review marks.</p>
+          <p class="fine">Runs in your browser. Nothing is uploaded. Shortcut: Ctrl or Cmd + Enter.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panes" id="panes">
+      <section id="contractSection" aria-label="Contract text" tabindex="-1">
+        <div class="contract-scroll" id="contractScroll">
+          <div class="contract-inner"><div id="contractText" aria-busy="false"></div></div>
+          <div class="contract-foot" id="contractFoot"></div>
+        </div>
+      </section>
+      <aside id="findingsAside" aria-label="Findings">
+        <div id="analyzing" aria-live="off">
+          <div id="skeleton">
+            <h2 class="results-h" style="font-size:1.375rem">Analyzing your contract</h2>
+            <p class="subline" id="stepText">Reading clauses</p>
+            <div class="bar" role="presentation"></div>
+            <p class="subline">This stays in your browser.</p>
+            <div class="skel" style="width:60%;margin-top:16px"></div>
+            <div class="skel row-s"></div><div class="skel row-s"></div><div class="skel row-s"></div><div class="skel row-s"></div><div class="skel row-s"></div>
+            <button type="button" class="btn" id="btnCancel">Cancel</button>
+          </div>
+        </div>
+        <div id="zoneA">
+          <div class="sumcard" id="sumCard">
+            <h2 class="results-h" id="resultsHead" tabindex="-1">Results</h2>
+            <p class="sumline" id="sumCounts"></p>
+            <p class="subline" id="sumReviewed"></p>
+            <p class="sumline" id="sumStart"></p>
+            <p class="subline" id="sumAssume">Assumes you are the customer or client.</p>
+            <button type="button" class="btn flt-open" id="btnFilter" aria-haspopup="dialog" style="margin-top:8px">Filter</button>
+          </div>
+          <div id="zeroMsg"></div>
+          <div class="filters" id="filtersZone">
+            <button type="button" class="btn sheet-close" id="btnSheetClose" style="float:right">Done</button>
+            <div class="flabel" id="sevLabel">Severity</div>
+            <div class="fgroup" id="sevGroup" role="group" aria-labelledby="sevLabel"></div>
+            <div class="flabel" id="catLabel">Category</div>
+            <div class="fgroup cats" id="catGroup" role="group" aria-labelledby="catLabel"></div>
+            <div class="fstat"><span id="showing" class="num"></span><button type="button" class="tbtn" id="btnClear" hidden>Clear filters</button></div>
+          </div>
+        </div>
+        <div id="listZone">
+          <ul class="list" id="list" role="listbox" aria-label="Findings, ranked highest score first" tabindex="-1"></ul>
+          <div class="empty-msg" id="filterEmpty" hidden><p style="margin:0 0 8px">No findings match these filters.</p><button type="button" class="btn" id="btnClear2">Clear filters</button></div>
+          <details class="more" id="dismissedBox" hidden><summary id="dismissedSum">Dismissed (0)</summary><ul class="list" id="dismissedList"></ul></details>
+          <details class="more" id="qcBox" hidden><summary id="qcSum">Not found in this contract (0)</summary><div id="qcList"></div></details>
+        </div>
+        <div id="detailZone" aria-live="off"></div>
+      </aside>
+    </div>
+    <div class="peek" id="peek" role="region" aria-label="Selected finding"></div>
+    <div id="sheetBackdrop"></div>
+  </main>
+  <div id="printReport" aria-hidden="true"></div>
+</div>
+
+<div id="live" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="toastHost"></div>
+<dialog id="confirmDlg" aria-labelledby="confirmTitle"><h2 id="confirmTitle">Start over?</h2><p id="confirmMsg">Your review marks will be lost.</p><div class="acts"><button type="button" class="btn" id="confirmNo">Cancel</button><button type="button" class="btn primary" id="confirmYes">Start over</button></div></dialog>
+<dialog id="mdDlg" aria-labelledby="mdTitle"><h2 id="mdTitle">Copy the report</h2><p>Your browser blocked automatic copying. The Markdown is selected below; press Ctrl or Cmd + C.</p><textarea id="mdText" readonly aria-label="Markdown report"></textarea><div class="acts"><button type="button" class="btn primary" id="mdClose">Close</button></div></dialog>
+
+<script type="application/json" id="taxonomy">{"version":"1.0","disclaimer":"Automated analysis draft for attorney review only. This is not legal advice, does not create an attorney-client relationship, and does not predict how any court, arbitrator or agency will rule. Pattern matching can miss or mis-flag clauses. Enforceability of many provisions is jurisdiction-dependent; items marked 'verify for jurisdiction' require review under applicable law by a licensed attorney.","severity_rubric":{"High":{"definition":"Clause may create significant, open-ended or hard-to-exit financial or legal exposure, or waive important rights. Prioritize for attorney review before signing.","score_range":[70,100]},"Medium":{"definition":"Clause shifts meaningful risk or cost to one party or limits options, but is bounded or commonly negotiated. Review and consider negotiating.","score_range":[40,69]},"Low":{"definition":"Clause is common or limited in effect but worth noting for awareness or clarification.","score_range":[1,39]}},"scoring":{"base":"each rule has base_score; modifiers add or subtract points","method":"score = base_score + sum(aggravator deltas matched in the clause) + mitigator_delta (once, if any mitigator matches) + sum(global modifier deltas matched in the clause); clamp to 1-100; map to severity_rubric. Scores rank review priority only and are not predictions of enforceability or outcome.","modifiers":[{"id":"sole-discretion","pattern":"(sole|absolute|unfettered)\\s+discretion","delta":8,"reason":"Decision power rests entirely with one party"},{"id":"without-notice","pattern":"without\\s+(prior\\s+)?(notice|consent)","delta":8,"reason":"No notice or consent required"},{"id":"irrevocable-perpetual","pattern":"\\b(irrevocabl[ey]|perpetual|in\\s+perpetuity)\\b","delta":5,"reason":"Obligation cannot be ended"},{"id":"notwithstanding","pattern":"notwithstanding\\s+anything","delta":5,"reason":"Overrides other protective clauses"},{"id":"any-and-all","pattern":"any\\s+and\\s+all","delta":3,"reason":"Very broad scope language"},{"id":"mutual","pattern":"\\b(mutual(ly)?|each\\s+party|either\\s+party|neither\\s+party)\\b","delta":-8,"reason":"Obligation runs both ways"},{"id":"reasonable","pattern":"\\b(commercially\\s+)?reasonabl[ey]\\b","delta":-4,"reason":"Reasonableness standard limits discretion"},{"id":"written-signed","pattern":"in\\s+writing\\s+(and\\s+)?signed\\s+by\\s+(both|each|all)","delta":-8,"reason":"Changes require signed writing by both sides"},{"id":"notice-period","pattern":"\\b(30|thirty|60|sixty|90|ninety)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice","delta":-5,"reason":"Defined advance notice period"},{"id":"cap","pattern":"\\b(capped|not\\s+to\\s+exceed|shall\\s+not\\s+exceed)\\b","delta":-4,"reason":"Exposure is capped"}]},"rules":[{"id":"auto-renewal-trap","category":"Auto-renewal","title":"Automatic renewal without clear opt-out","group":"core","base_score":72,"why_it_matters":"The contract renews itself unless you cancel in a narrow window, which can lock you into another full term and payments.","triggers":["automatic(ally)?\\s+renew","auto[- ]?renew","renew[^.;]{0,120}successive\\s+(term|period)s?","evergreen","unless\\s+(either\\s+party\\s+)?(gives|provides)\\s+(written\\s+)?notice\\s+of\\s+non[- ]?renewal","shall\\s+continue\\s+(in\\s+effect\\s+)?(from\\s+)?(year|month)\\s+to\\s+(year|month)","\\b(?:continues?|continuing|extends?|extended|renews?|renewed|rolls?\\s+over)\\b[^.;]{0,120}\\b(?:successive|consecutive|subsequent|further|additional)\\s+(?:[\\w-]+\\s+){0,2}(?:terms?|periods?)\\b","\\b(?:continues?|extends?|extended|renews?|renewed|rolls?\\s+over)\\s+automatically","\\bautomatically\\s+(?:be\\s+)?(?:continues?|continued|extends?|extended|renews?|renewed|rolls?\\s+over)\\b","unless[^.;]{0,120}notice\\s+of\\s+(?:non[- ]?renewal|termination|cancell?ation)","unless[^.;]{0,80}\\bcancell?ed\\s+in\\s+writing","\\brolls?\\s+over\\b[^.;]{0,60}\\b(?:term|period|year)"],"mitigators":["may\\s+cancel\\s+at\\s+any\\s+time","reminder\\s+notice","either\\s+party\\s+may\\s+terminate[^.;]{0,120}(30|thirty)\\s+days","opt[- ]?in\\s+to\\s+renew"],"mitigator_delta":-15,"aggravators":[{"pattern":"(60|sixty|90|ninety|120|one\\s+hundred\\s+twenty)\\s+days\\s+(prior\\s+)?(written\\s+)?notice[^.;]{0,120}renew","delta":8,"reason":"Long advance notice window before renewal is easy to miss"},{"pattern":"renew[^.;]{0,120}(price|fee|rate)s?\\s+(then\\s+in\\s+effect|current)","delta":7,"reason":"Renewal at unspecified then-current pricing"},{"pattern":"renew[^.;]{0,120}(two|three|five|2|3|5)[- ]years?","delta":6,"reason":"Multi-year renewal term"},{"pattern":"(?:renew|extend|continu|roll)[^.;]{0,120}then[- ]current\\s+(?:price|fee|rate|charge)s?","delta":7,"reason":"Renewal at unspecified then-current pricing"}],"suggested_fix":"Ask for renewal only on written confirmation, or a reminder notice 30-60 days before renewal plus a right to cancel at any time before the renewal date.","jurisdiction_note":"Many US states and the FTC have automatic-renewal disclosure and cancellation rules, mainly for consumer contracts; verify for jurisdiction.","negation_check":true},{"id":"unilateral-change","category":"Unilateral price/fee/term changes","title":"One party may change prices, fees or terms unilaterally","group":"core","base_score":75,"why_it_matters":"The other side can raise prices or rewrite terms after you sign, so the deal you agreed to may not be the deal you get.","triggers":["(?:reserves?\\s+(?:to\\s+itself\\s+)?the\\s+(?:[a-z-]+\\s+){0,2}right|\\bmay)\\b[^.;]{0,60}?\\b(?:change|modify|amend|update|increase|adjust|raise|revise)\\b(?!\\s+(?:the\\s+|its\\s+|their\\s+|our\\s+)?(?:number|quantity|count|volume|amount\\s+of|seats?|users?|licen[sc]es?|usage|capacity|subscriptions?\\b(?!\\s+(?:charge|fee|price|pricing|rate|tariff)s?\\b))|\\s+(?:[\\w-]+\\s+){0,2}(?:seats?|users?|licen[sc]es?)\\b)[^.;]{0,120}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff|term)s?\\b","(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\s+(are\\s+)?subject\\s+to\\s+change","(posting|post)\\s+(the\\s+)?(revised|updated|amended|modified)\\s+(terms|agreement|version)","continued\\s+use[^.;]{0,120}(constitutes|deemed|shall\\s+be)\\s+(your\\s+)?accept","at\\s+(its|our)\\s+sole\\s+discretion[^.;]{0,120}(change|modify|amend|increase)","(?:sole|absolute)\\s+discretion[^.;]{0,120}\\b(?:increase|adjust|raise|change|modify|revise)\\b[^.;]{0,120}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b","\\b(?:increase|adjust|raise|change|modify|revise)\\b[^.;]{0,100}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b[^.;]{0,100}(?:sole|absolute)\\s+discretion","from\\s+time\\s+to\\s+time[^.;]{0,60}\\b(?:change|modify|amend|update|increase|adjust|raise|revise)\\b[^.;]{0,120}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b","\\b(?:price|fee|rate|charge|tariff)s?\\b[^.;]{0,80}\\bsubject\\s+to\\s+(?:change|modification|revision|adjustment|amendment|variation)\\b","\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b[^.;]{0,100}\\b(?:modif|chang|revis|adjust|amend|vari)\\w*[^.;]{0,60}\\bat\\s+(?:its|their|our)\\s+(?:sole\\s+|absolute\\s+)?discretion","\\b(?:increase|raise|adjust|change|modify|revise)\\b(?!\\s+(?:the\\s+|its\\s+|their\\s+|our\\s+)?(?:number|quantity|count|volume|amount\\s+of|seats?|users?|licen[sc]es?|usage|capacity|subscriptions?\\b(?!\\s+(?:charge|fee|price|pricing|rate|tariff)s?\\b))|\\s+(?:[\\w-]+\\s+){0,2}(?:seats?|users?|licen[sc]es?)\\b)[^.;]{0,100}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b[^.;]{0,100}\\bwithout\\s+(?:the\\s+|any\\s+)?(?:[\\w'’-]+\\s+){0,2}?(?:prior\\s+|further\\s+|written\\s+)?consent"],"mitigators":["(mutual|both\\s+parties)\\s+(written\\s+)?(agreement|consent)","(30|thirty|60|sixty|90|ninety)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice","(cap|not\\s+(to\\s+)?exceed)[^.;]{0,120}(percent|%)","right\\s+to\\s+terminate[^.;]{0,120}(without\\s+penalty|refund)","signed\\s+by\\s+(both|each)\\s+part","\\b(?:Customer|Client|Subscriber|Licensee|Buyer)\\s+may\\s+(?:at\\s+any\\s+time\\s+)?(?:increase|reduce|decrease|add|remove|upgrade|downgrade)\\b[^.;]{0,60}\\b(?:seats?|users?|licen[sc]es?|quantit\\w+|usage|capacity)\\b"],"mitigator_delta":-15,"aggravators":[{"pattern":"without\\s+(prior\\s+)?notice","delta":10,"reason":"Changes may take effect with no notice"},{"pattern":"(retroactive|retroactively)","delta":8,"reason":"Changes may apply retroactively"},{"pattern":"(any|all)\\s+(other\\s+)?terms","delta":5,"reason":"Change right extends to any term, not just price"}],"suggested_fix":"Require written notice at least 30-60 days ahead, a cap on increases (e.g. CPI or a fixed percent per year), and a right to terminate without penalty if you reject the change.","negation_check":true},{"id":"broad-indemnification","category":"Broad indemnification","title":"Broad or one-sided indemnification","group":"core","base_score":78,"why_it_matters":"You may have to pay the other side's losses, legal costs and third-party claims, possibly even ones caused by their own conduct.","triggers":["(indemnify|indemnification)[^.;]{0,120}(defend|hold\\s+harmless)","hold\\s+(?:[\\w'’.-]+\\s+){0,7}?harmless","(?:(?:indemnif\\w*|hold\\w*\\s+(?:[\\w'’.-]+\\s+){0,7}?harmless|defend\\w*|assum\\w+\\s+(?:all\\s+|any\\s+|full\\s+)?(?:liabilit\\w+|risks?)|reimburs\\w+)[^.;]{0,160}\\b(?:any\\s+and\\s+all|all|every)\\s+(?:claims|losses|liabilities|damages)\\b|\\b(?:any\\s+and\\s+all|all|every)\\s+(?:claims|losses|liabilities|damages)\\b[^.;]{0,160}(?:indemnif\\w*|hold\\w*\\s+(?:[\\w'’.-]+\\s+){0,7}?harmless|defend\\w*|assum\\w+\\s+(?:all\\s+|any\\s+|full\\s+)?(?:liabilit\\w+|risks?)|reimburs\\w+))","indemnif[^.;]{0,120}(arising\\s+out\\s+of|relating\\s+to|in\\s+connection\\s+with)","indemnif[^.;]{0,120}(regardless\\s+of|whether\\s+or\\s+not\\s+caused\\s+by|including)\\s+(its|their|the\\s+indemnified)\\s+(own\\s+)?negligence","\\bindemnif\\w*[^.;]{0,80}\\b(?:against|from|for)\\b[^.;]{0,60}\\b(?:any\\s+and\\s+all|all|any|every)\\s+(?:loss|losses|injur\\w+|damages?|claims?|liabilit\\w+|costs?|expenses?)\\b","\\bassum\\w+\\s+(?:all|any\\s+and\\s+all|full)\\s+(?:risks?|liabilit\\w+)\\b","\\bindemnif\\w*[^.;]{0,160}\\b(?:howsoever|however)\\s+(?:caused|arising)","\\b(?:every|all|any)\\s+(?:claims?|costs?|expenses?|liabilit\\w+|losses?)\\b[^.;]{0,80}\\bwhatsoever\\b[^.;]{0,120}\\b(?:sole|own)\\s+negligence"],"mitigators":["mutual(ly)?\\s+indemnif","each\\s+party\\s+(shall|will)\\s+indemnify","to\\s+the\\s+extent\\s+caused\\s+by","(except|excluding)[^.;]{0,120}(gross\\s+)?negligence\\s+or\\s+(willful|wilful)\\s+misconduct","(subject\\s+to|limited\\s+by)\\s+(the\\s+)?(limitation\\s+of\\s+liability|cap)"],"mitigator_delta":-15,"aggravators":[{"pattern":"(own|sole)\\s+negligence","delta":12,"reason":"Covers the other party's own negligence"},{"pattern":"(first[- ]party|direct)\\s+claims","delta":6,"reason":"Extends beyond third-party claims"},{"pattern":"(uncapped|without\\s+limit|unlimited)","delta":8,"reason":"No cap on indemnity exposure"},{"pattern":"\\bwhatsoever\\b","delta":4,"reason":"Indemnity extends to liabilities of every kind"},{"pattern":"\\b(?:howsoever|however)\\s+(?:caused|arising)","delta":8,"reason":"Indemnity applies regardless of cause"},{"pattern":"\\bof\\s+any\\s+(?:nature|kind)\\b","delta":3,"reason":"Very broad scope language"},{"pattern":"\\b(?:resulting|arising)\\s+from\\s+[^.;]{0,40}(?:sole\\s+|own\\s+)negligence","delta":4,"reason":"Covers the indemnitee's own fault"}],"suggested_fix":"Make indemnities mutual, limited to third-party claims caused by the indemnifying party's breach or negligence, and subject to the liability cap.","jurisdiction_note":"Anti-indemnity statutes in some states limit indemnity for the indemnitee's own negligence (often in construction); verify for jurisdiction."},{"id":"non-compete-restrictive-covenant","category":"Non-compete / non-solicit / exclusivity","title":"Non-compete, non-solicitation or exclusivity restriction","group":"core","base_score":70,"why_it_matters":"You may be barred from working with competitors, hiring people or serving customers for a period after the contract ends.","triggers":["non[- ]?compet","shall\\s+not,?\\s+(directly\\s+or\\s+indirectly,?\\s+)?(compete|engage\\s+in)","non[- ]?solicit","(shall|will)\\s+not,?[^.;]{0,120}solicit","exclusiv(e|ity)\\s+(provider|supplier|dealer|arrangement|basis)","(restricted|restrictive)\\s+(period|covenant)","(agrees?|covenants?)\\s+not\\s+to,?\\s+(directly\\s+or\\s+indirectly,?\\s+)?(compete|solicit)","\\bnot\\s+(?:to\\s+)?(?:[^.;]{0,40}?)(?:provide\\s+(?:any\\s+)?(?:services|assistance)\\s+to|work\\s+for|be\\s+(?:employed|engaged|retained)\\s+by|render\\s+services\\s+to|perform\\s+services\\s+for|consult\\s+for)[^.;]{0,80}\\bcompetit","(?:restricted|prohibited|barred|precluded)\\s+from\\s+(?:directly\\s+or\\s+indirectly\\s+)?(?:competing|working\\s+for|providing\\s+services\\s+to|being\\s+employed)","compet[^.;]{0,120}(?:radius|territory|miles)[^.;]{0,120}\\b(?:months?|years?)\\b","\\b(?:months?|years?)\\b[^.;]{0,120}compet[^.;]{0,120}(?:radius|territory|miles)","(?:radius|territory|miles)[^.;]{0,120}compet[^.;]{0,120}\\b(?:months?|years?)\\b","\\bnot\\s+(?:to\\s+)?(?:own|operate|open|start|engage\\s+in)\\s+(?:a\\s+|any\\s+)?(?:competing|similar)\\s+business","\\b(?:refrain|abstain|desist)\\w*\\s+from\\s+(?:[\\w-]+\\s+){0,3}?(?:working|engaging|acting|competing|being\\s+employed|providing|performing|operating|serving)\\b[^.;]{0,100}\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b","\\b(?:following|after|upon|post)[- ]?(?:the\\s+)?(?:separation|termination|cessation|departure|resignation)\\b[^.;]{0,160}\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b[^.;]{0,160}\\b(?:months?|years?)\\b","\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b[^.;]{0,120}\\b(?:for\\s+a\\s+period\\s+of|period\\s+of)\\s+[^.;]{0,40}\\b(?:months?|years?)\\b[^.;]{0,100}\\b(?:area|region|state|territory|radius|miles)\\b","\\bnot\\b[^.;]{0,80}?\\b(?:work|be\\s+employed|provide\\s+services|engage)\\b[^.;]{0,60}?\\b(?:for|with|in)\\b[^.;]{0,80}?\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b","\\bcompeting\\s+with\\s+the\\s+(?:Company|Employer|Client)\\b"],"mitigators":["\\b(6|six)\\s+months","limited\\s+to[^.;]{0,120}(geograph|territory|customers\\s+with\\s+whom)","mutual\\s+non[- ]?solicit","(general|public)\\s+(solicitation|advertis)[^.;]{0,120}(shall\\s+not|does\\s+not|not\\s+be)"],"mitigator_delta":-10,"aggravators":[{"pattern":"(two|three|five|2|3|5)\\s*\\(?\\d?\\)?\\s*years","delta":8,"reason":"Long restriction period"},{"pattern":"(worldwide|anywhere\\s+in\\s+the\\s+world|any\\s+geographic)","delta":10,"reason":"Unlimited geography"},{"pattern":"(liquidated\\s+damages|injunct)","delta":5,"reason":"Paired with liquidated damages or injunction remedy"}],"suggested_fix":"Narrow the restriction to a short period, a defined territory and the specific business or customers actually involved, and prefer a non-solicit over a full non-compete.","jurisdiction_note":"Non-competes are void or limited in some US states (e.g. California) and restricted in others; the enforceability landscape changes. General caution only; verify for jurisdiction.","negation_check":true},{"id":"jury-waiver-arbitration","category":"Waived jury rights / arbitration / class waiver","title":"Jury trial waiver, mandatory arbitration or class-action waiver","group":"core","base_score":70,"why_it_matters":"You may give up the right to a jury, to go to court, or to join a group claim, and arbitration can limit discovery and appeal.","triggers":["waive[^.;]{0,120}(right\\s+to\\s+(a\\s+)?)?(trial\\s+by\\s+)?jury","jury\\s+trial\\s+waiver","(binding|mandatory|final)\\s+(?:[a-z]+\\s+){0,2}arbitration","(shall|must|will)\\s+be\\s+(finally\\s+)?(resolved|settled)\\s+(exclusively\\s+)?by\\s+arbitration","class[- ]action\\s+waiver","(waive|not\\s+(participate|bring))[^.;]{0,120}class\\s+(action|arbitration|or\\s+representative)","(?:give|gives|giving)\\s+up[^.;]{0,60}\\bright[^.;]{0,80}\\b(?:jury|class|court)","(?:surrender|surrenders|surrendered|forgo|forgoes|forego|relinquish|relinquishes|relinquished|renounce|renounces)\\b[^.;]{0,60}\\b(?:rights?|entitlements?)[^.;]{0,80}\\b(?:jury|class)","waiver\\s+of[^.;]{0,40}\\b(?:jury|class)","(?:participate|join|bring)[^.;]{0,60}class\\s+action","knowingly[^.;]{0,40}voluntarily[^.;]{0,40}waive","\\b(?:surrender|forgo|forego|relinquish|renounce|waive|give\\s+up)\\w*\\b[^.;]{0,100}\\b(?:decided|determined|tried|heard|resolved)\\s+by\\s+(?:a\\s+|an\\s+)?(?:jury|judge\\s+or\\s+jury)","\\b(?:decided|determined|resolved|settled|heard|adjudicated)\\s+(?:finally\\s+)?(?:exclusively\\s+)?by\\s+(?:a\\s+|an\\s+|the\\s+)?(?:single|sole|one|neutral|independent)\\s+arbitrators?\\b"],"mitigators":["opt[- ]?out[^.;]{0,120}arbitration","small\\s+claims\\s+court","(mutual|either\\s+party)\\s+(may\\s+)?elect","(company|we)\\s+(will\\s+)?(pay|bear)[^.;]{0,120}arbitration\\s+(fees|costs)"],"mitigator_delta":-10,"aggravators":[{"pattern":"(confidential|secret)\\s+arbitration","delta":4,"reason":"Confidential proceedings"},{"pattern":"(each\\s+party|you)\\s+(shall\\s+)?(bear|pay)[^.;]{0,120}(arbitrat|filing)\\s+(fee|cost)","delta":6,"reason":"User bears arbitration costs"},{"pattern":"(shorten|within\\s+(one|1|six|6)\\s+(year|month))[^.;]{0,120}(claim|action)","delta":6,"reason":"Shortened limitations period"}],"suggested_fix":"Ask for a mutual, opt-out-able arbitration clause with costs borne by the drafting party and a small-claims carve-out, or remove the jury and class waivers.","jurisdiction_note":"Enforceability of pre-dispute jury waivers, arbitration and class waivers varies by jurisdiction and claim type (e.g. some employment and consumer claims); verify for jurisdiction.","negation_check":true,"ignore_modifiers":["mutual"]},{"id":"one-sided-liability-limit","category":"Limitation of liability","title":"One-sided or uncapped liability","group":"extra","base_score":65,"why_it_matters":"Your liability may be unlimited while the other side's is capped low or excluded, shifting most risk to you.","triggers":["limitation\\s+of\\s+liability","in\\s+no\\s+event\\s+shall[^.;]{0,120}(be\\s+)?liable","(aggregate|total)\\s+liability[^.;]{0,120}(shall\\s+not|not\\s+to)\\s+exceed","(disclaim|exclude)s?[^.;]{0,120}(consequential|indirect|incidental|special)","(unlimited|uncapped)\\s+liability"],"mitigators":["(neither|each)\\s+party","mutual","(except|excluding)[^.;]{0,120}(gross\\s+negligence|willful|wilful|fraud)"],"mitigator_delta":-12,"aggravators":[{"pattern":"exceed[^.;]{0,120}(fees\\s+paid\\s+in\\s+the\\s+(prior|preceding)\\s+(one|1|three|3)\\s+months?|\\$\\s?(1|10|50|100)\\b)","delta":10,"reason":"Very low cap for the other side"},{"pattern":"(customer|client|you)\\s+(shall\\s+be|is|are)\\s+(fully|solely)\\s+liable","delta":10,"reason":"Your liability stated as full or sole"}],"suggested_fix":"Make the cap and exclusions mutual, set the cap at a meaningful multiple of fees, and carve out confidentiality, data breach and indemnity as appropriate."},{"id":"unilateral-termination-convenience","category":"Termination","title":"Unilateral termination for convenience","group":"extra","base_score":55,"why_it_matters":"The other side can end the deal at any time for any reason while you remain bound, possibly without refund.","triggers":["terminat[^.;]{0,120}for\\s+convenience","terminat[^.;]{0,120}(at\\s+any\\s+time|for\\s+any\\s+reason|for\\s+no\\s+reason)","(sole|absolute)\\s+discretion[^.;]{0,120}terminat","terminat[^.;]{0,120}without\\s+cause"],"mitigators":["either\\s+party\\s+may\\s+terminat","(pro[- ]?rata|prorated)\\s+refund","(30|thirty|60|sixty|90|ninety)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice"],"mitigator_delta":-15,"aggravators":[{"pattern":"terminat[^.;]{0,120}(immediately|without\\s+notice)","delta":10,"reason":"Immediate termination without notice"},{"pattern":"(no|without)\\s+(refund|liability)[^.;]{0,120}terminat|terminat[^.;]{0,120}(no|without)\\s+(refund|liability)","delta":8,"reason":"No refund or liability on termination"}],"suggested_fix":"Make termination for convenience mutual with 30+ days' written notice and a pro-rata refund of prepaid fees.","negation_check":true},{"id":"ip-assignment-overreach","category":"Intellectual property","title":"Overbroad IP assignment or license grab","group":"extra","base_score":62,"why_it_matters":"You may hand over ownership of work, pre-existing materials or future ideas beyond what the deal actually covers.","triggers":["(hereby\\s+)?(assigns?|transfers?)[^.;]{0,120}(all\\s+)?(right,?\\s+title\\s+and\\s+interest|intellectual\\s+property)","work\\s+made\\s+for\\s+hire","(perpetual|irrevocable)[^.;]{0,120}(royalty[- ]free|worldwide)[^.;]{0,120}licen[cs]e","(pre[- ]?existing|background)\\s+(ip|intellectual\\s+property|materials)[^.;]{0,120}(assign|licen[cs]e)","(ideas|inventions|improvements)[^.;]{0,120}(conceived|developed)"],"mitigators":["(excluding|except|other\\s+than)[^.;]{0,120}(pre[- ]?existing|background)","(solely|only)[^.;]{0,120}(deliverables|for\\s+the\\s+purpose)","upon\\s+(full\\s+)?payment","retain(s)?\\s+(all\\s+)?(ownership|title)"],"mitigator_delta":-12,"aggravators":[{"pattern":"(whether\\s+or\\s+not|regardless\\s+of\\s+whether)[^.;]{0,120}(during|working\\s+hours|using)","delta":8,"reason":"Reaches work outside the engagement"},{"pattern":"moral\\s+rights[^.;]{0,120}waive","delta":4,"reason":"Moral rights waiver"}],"suggested_fix":"Limit assignment to paid-for deliverables, expressly exclude pre-existing and general know-how, and condition transfer on full payment.","jurisdiction_note":"Some states limit employee invention assignment for inventions made on own time (e.g. California Labor Code 2870); verify for jurisdiction."},{"id":"confidentiality-one-way-perpetual","category":"Confidentiality","title":"One-way or perpetual confidentiality","group":"extra","base_score":45,"why_it_matters":"Only you may be bound to secrecy, possibly forever, while the other side can use your information freely.","triggers":["(confidential|confidentiality)[^.;]{0,120}(perpetual|in\\s+perpetuity|indefinitely|survive\\s+indefinitely)","(recipient|you|customer|client)\\s+(shall|will|agrees\\s+to)\\s+(keep|hold|maintain)[^.;]{0,120}confiden","(non[- ]?disclosure|confidentiality)\\s+obligations?\\s+shall\\s+survive","(no|without)\\s+(time\\s+)?limit[^.;]{0,120}confiden"],"mitigators":["mutual","each\\s+party","(two|three|five|2|3|5)\\s*\\(?\\d?\\)?\\s*years","(publicly\\s+available|independently\\s+developed|already\\s+known)","trade\\s+secrets?[^.;]{0,120}(so\\s+long\\s+as|for\\s+as\\s+long)"],"mitigator_delta":-10,"aggravators":[{"pattern":"(company|provider|we)\\s+may\\s+(use|disclose)[^.;]{0,120}(your|customer|client)\\s+(information|data)","delta":8,"reason":"Other party may use your confidential info"}],"suggested_fix":"Make the obligations mutual, include standard exclusions, and limit the term to a fixed number of years except for trade secrets."},{"id":"distant-governing-law-venue","category":"Governing law / venue","title":"Governing law or exclusive venue far from you","group":"extra","base_score":40,"why_it_matters":"Disputes may have to be brought under unfamiliar law in a distant court, raising cost and practical difficulty.","triggers":["governed\\s+by[^.;]{0,120}laws?\\s+of","exclusive\\s+(jurisdiction|venue)","(submit|consent)s?\\s+to[^.;]{0,120}(personal\\s+)?jurisdiction","(venue|forum)[^.;]{0,120}(shall\\s+be|lie)\\s+(exclusively\\s+)?in","waives?[^.;]{0,120}(forum\\s+non\\s+conveniens|objection\\s+to\\s+venue)"],"mitigators":["(defendant['’]?s|your)\\s+(home\\s+)?(state|county|domicile)","non[- ]?exclusive\\s+jurisdiction","(remote|video|virtual)\\s+(hearing|appearance)"],"mitigator_delta":-10,"aggravators":[{"pattern":"(outside\\s+the\\s+united\\s+states|england|singapore|hong\\s+kong|cayman)","delta":6,"reason":"Foreign law or venue"}],"suggested_fix":"Propose your home state's law and courts, non-exclusive jurisdiction, or the defendant's home forum.","jurisdiction_note":"Some states restrict out-of-state forum or choice-of-law clauses for certain contract types (e.g. franchise, employment, consumer); verify for jurisdiction."},{"id":"one-way-fee-shifting","category":"Attorney fees","title":"One-way or automatic attorney fee shifting","group":"extra","base_score":50,"why_it_matters":"You may have to pay the other side's lawyers even in disputes they start or partly lose.","triggers":["(attorneys?['’]?|legal)\\s+fees[^.;]{0,120}(shall\\s+be\\s+)?(borne|paid|reimbursed)\\s+by","(you|customer|client)\\s+(shall|will|agrees\\s+to)\\s+(pay|reimburse)[^.;]{0,120}(attorneys?['’]?|legal|collection)\\s+(fees|costs)","costs\\s+of\\s+collection","(regardless|irrespective)\\s+of\\s+(the\\s+)?outcome[^.;]{0,120}fees"],"mitigators":["prevailing\\s+party","each\\s+party\\s+(shall\\s+)?bear\\s+its\\s+own","reasonable\\s+attorneys?['’]?\\s+fees"],"mitigator_delta":-12,"aggravators":[{"pattern":"(regardless|irrespective)\\s+of\\s+(the\\s+)?outcome","delta":10,"reason":"Fees owed regardless of who wins"},{"pattern":"(collection\\s+agency|percent|%)[^.;]{0,120}(collection|fees)","delta":4,"reason":"Percentage-based collection fees"}],"suggested_fix":"Replace with a mutual prevailing-party clause limited to reasonable fees, or each party bears its own costs.","jurisdiction_note":"Some states make one-way fee clauses reciprocal by statute (e.g. California Civil Code 1717); verify for jurisdiction."},{"id":"late-fees-liquidated-damages","category":"Penalties","title":"Late-payment penalties, interest or liquidated damages","group":"extra","base_score":45,"why_it_matters":"Small delays or breaches may trigger fixed charges or high interest that exceed the real harm.","triggers":["late\\s+(payment\\s+)?(fee|charge|penalt)","interest[^.;]{0,120}(per\\s+month|per\\s+annum|monthly)","liquidated\\s+damages","(early\\s+)?termination\\s+(fee|charge|penalty)","(1\\.5|2|3|5)\\s*%\\s+(per\\s+month|monthly)"],"mitigators":["(maximum|highest)\\s+(rate\\s+)?(permitted|allowed)\\s+by\\s+(applicable\\s+)?law","grace\\s+period","reasonable\\s+(estimate|pre[- ]?estimate)"],"mitigator_delta":-8,"aggravators":[{"pattern":"(remaining|all\\s+remaining|balance\\s+of)[^.;]{0,120}(fees|payments)[^.;]{0,120}(due|accelerat|immediately)","delta":10,"reason":"Acceleration of all remaining payments"},{"pattern":"(1\\.5|2|3|5)\\s*%\\s+(per\\s+month|monthly)","delta":5,"reason":"High monthly interest rate"}],"suggested_fix":"Ask for a 10-30 day grace period, interest capped at a modest or statutory rate, and liquidated damages tied to a reasonable estimate of actual loss.","jurisdiction_note":"Usury limits and penalty-clause rules vary; liquidated damages deemed penalties may be unenforceable in some jurisdictions; verify for jurisdiction."},{"id":"data-use-sale-rights","category":"Data rights","title":"Broad rights to use, share or sell your data","group":"extra","base_score":60,"why_it_matters":"Your or your customers' data may be used for other purposes, shared or sold, creating privacy and compliance exposure.","triggers":["(sell|sale\\s+of|monetiz)[^.;]{0,120}(data|information)","(use|share|disclose)[^.;]{0,120}(data|information)[^.;]{0,120}(any\\s+purpose|third\\s+part(y|ies)|affiliates|partners)","(perpetual|irrevocable)[^.;]{0,120}(licen[cs]e|right)[^.;]{0,120}(data|content)","(aggregate|anonymi[sz]ed|de[- ]?identified)\\s+data[^.;]{0,120}(any\\s+purpose|commercial)","train[^.;]{0,120}(model|machine\\s+learning|artificial\\s+intelligence|ai)"],"mitigators":["(solely|only)\\s+to\\s+(provide|perform)\\s+the\\s+services","data\\s+processing\\s+(agreement|addendum)","(will\\s+not|shall\\s+not|never)\\s+sell","(delete|return)[^.;]{0,120}(upon|after)\\s+(termination|expiration)"],"mitigator_delta":-15,"aggravators":[{"pattern":"(personal|health|biometric|financial)\\s+(data|information)","delta":8,"reason":"Sensitive data categories involved"}],"suggested_fix":"Restrict use to providing the services, prohibit sale and model training without opt-in consent, and require deletion or return on termination.","jurisdiction_note":"Privacy laws (e.g. GDPR, CCPA/CPRA, HIPAA, state biometric laws) may impose separate requirements; verify for jurisdiction.","negation_check":true},{"id":"personal-guarantee","category":"Personal guarantee","title":"Personal guarantee of business obligations","group":"extra","base_score":80,"why_it_matters":"An individual, not just the company, may be personally on the hook for the business's debts under the contract.","triggers":["personal(ly)?\\s+guarant","(unconditionally|irrevocably)\\s+guarant","guarantor","jointly\\s+and\\s+severally\\s+liable","(individual|personal)\\s+capacity[^.;]{0,120}(liable|guarant)"],"mitigators":["(limited|capped)\\s+(to|at)[^.;]{0,120}(\\$|amount|months)","(terminat|expire|release)s?[^.;]{0,120}guarant[^.;]{0,120}(after|upon)","burn[- ]?off"],"mitigator_delta":-12,"aggravators":[{"pattern":"waive[^.;]{0,120}(notice|demand|presentment|defen[cs]es|suretyship)","delta":8,"reason":"Guarantor waives standard defenses"},{"pattern":"continuing\\s+guarant","delta":6,"reason":"Continuing guarantee covering future obligations"}],"suggested_fix":"Remove the guarantee, or cap it at a fixed amount and duration with release after a period of timely performance.","jurisdiction_note":"Spousal-signature, community-property and consumer-protection rules may affect guarantees; verify for jurisdiction.","negation_check":true},{"id":"eng-non-refundable-fees","category":"Engagement: fees","title":"Non-refundable or earned-on-receipt retainer","group":"engagement","base_score":72,"why_it_matters":"Fees may be kept even if little or no work is done or the engagement ends early.","triggers":["non[- ]?refundable","(earned|deemed\\s+earned)\\s+(up)?on\\s+receipt","no\\s+refunds?","(fees|retainer)[^.;]{0,120}(shall\\s+not|will\\s+not)\\s+be\\s+refunded","flat\\s+fee[^.;]{0,120}(earned|non[- ]?refundable)"],"mitigators":["(refund|return)[^.;]{0,120}unearned","trust\\s+(account|iolta)","(milestone|stage)s?[^.;]{0,120}earned","(pro[- ]?rata|prorated)\\s+refund"],"mitigator_delta":-15,"aggravators":[{"pattern":"(regardless\\s+of|irrespective\\s+of|even\\s+if)[^.;]{0,120}(outcome|denial|approval|withdraw|terminat)","delta":8,"reason":"Kept regardless of outcome or termination"}],"suggested_fix":"Ask that unearned fees be refundable, held in trust until earned, and that fees be earned by defined milestones.","jurisdiction_note":"Many bar rules restrict truly non-refundable legal fees and require refund of unearned amounts; verify for jurisdiction.","negation_check":true},{"id":"eng-fee-change-without-consent","category":"Engagement: fees","title":"Fee changes without client consent","group":"engagement","base_score":65,"why_it_matters":"The firm may raise rates or add charges mid-matter without your written agreement.","triggers":["(hourly\\s+)?rates?[^.;]{0,120}(subject\\s+to\\s+change|may\\s+(be\\s+)?(change|increase|adjust))","(firm|we)\\s+(reserves?|may)[^.;]{0,120}(revise|increase|adjust)[^.;]{0,120}(fee|rate)s?","additional\\s+(fees|charges)[^.;]{0,120}(as\\s+(determined|deemed)|in\\s+(its|our)\\s+discretion)","(annual|periodic)\\s+(rate\\s+)?(increase|adjustment)"],"mitigators":["(written\\s+)?consent\\s+of\\s+(the\\s+)?client","(30|thirty|60|sixty)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice","signed\\s+by\\s+(both|the\\s+client)"],"mitigator_delta":-15,"aggravators":[{"pattern":"without\\s+(prior\\s+)?(notice|consent)","delta":10,"reason":"No notice or consent required"}],"suggested_fix":"Require written client consent for any fee or rate change, with advance notice and a right to end the engagement before new rates apply.","negation_check":true},{"id":"eng-waiver-client-rights","category":"Engagement: client rights","title":"Waiver of client rights or firm liability","group":"engagement","base_score":70,"why_it_matters":"You may give up rights such as suing for malpractice, getting your file, or holding the firm to its duties.","triggers":["(client\\s+)?(waives?|releases?)[^.;]{0,120}(claims?|rights?|malpractice)","(firm|we)\\s+(shall\\s+not\\s+be|is\\s+not|are\\s+not)\\s+(liable|responsible)[^.;]{0,120}(outcome|denial|delay|decision)","(limit|cap)s?[^.;]{0,120}(firm['’]?s|our)\\s+liability","(retain|withhold|keep)[^.;]{0,120}(client\\s+)?file[^.;]{0,120}(until|unless)\\s+(paid|payment)"],"mitigators":["independent\\s+(legal\\s+)?(counsel|advice)","(no\\s+guarantee|cannot\\s+guarantee)[^.;]{0,120}outcome","nothing\\s+in\\s+this\\s+agreement[^.;]{0,120}(limit|waive)"],"mitigator_delta":-10,"aggravators":[{"pattern":"malpractice","delta":10,"reason":"Prospective malpractice limitation"}],"suggested_fix":"Strike prospective waivers of malpractice claims and file-retention conditions; keep only a plain statement that no outcome is guaranteed.","jurisdiction_note":"Professional conduct rules often bar prospectively limiting malpractice liability unless the client is independently represented (e.g. ABA Model Rule 1.8(h)); verify for jurisdiction.","negation_check":true},{"id":"eng-unclear-scope","category":"Engagement: scope","title":"Unclear or open-ended scope of services","group":"engagement","base_score":50,"why_it_matters":"If the services are vague you may be charged extra for work you assumed was included, or the firm may treat key steps as out of scope.","triggers":["(services|work)\\s+(may\\s+)?(include|including)\\s+(but\\s+(are\\s+)?not\\s+limited\\s+to|such\\s+other)","(any\\s+)?(other|additional)\\s+(services|matters)\\s+as\\s+(may\\s+be\\s+)?(necessary|required|requested|appropriate)","(outside|beyond|not\\s+within)\\s+(the\\s+)?scope[^.;]{0,120}(additional|separate)\\s+(fee|charge|engagement)","(rfe|request\\s+for\\s+evidence|noid|appeal|motion)[^.;]{0,120}(additional|separate)\\s+(fee|charge)"],"mitigators":["scope\\s+of\\s+(services|representation|engagement)\\s*(is|shall\\s+be)?\\s*(limited\\s+to|as\\s+follows|:)","(exhibit|schedule|appendix)\\s+[a-z0-9]+[^.;]{0,120}scope","(includes|included)\\s*:"],"mitigator_delta":-12,"aggravators":[],"suggested_fix":"List the specific services, filings and stages included, those excluded, and the fixed or estimated fee for common add-ons such as RFE responses or appeals."},{"id":"eng-mandatory-arbitration","category":"Engagement: disputes","title":"Mandatory arbitration of fee or malpractice disputes","group":"engagement","base_score":65,"why_it_matters":"Disputes with the firm, including over fees or quality of work, may be forced into private arbitration.","triggers":["(fee\\s+)?disputes?[^.;]{0,120}(binding\\s+)?arbitration","(malpractice|professional\\s+negligence)[^.;]{0,120}arbitrat","(binding|mandatory)\\s+arbitration","waive[^.;]{0,120}jury"],"mitigators":["(bar\\s+association|state\\s+bar)\\s+fee\\s+arbitration\\s+program","(client\\s+)?(may\\s+)?(opt\\s+out|elect|choose)[^.;]{0,120}(court|arbitrat)","(advised|informed)[^.;]{0,120}(advantages|disadvantages|independent\\s+counsel)"],"mitigator_delta":-12,"aggravators":[{"pattern":"(client|you)\\s+(shall\\s+)?(bear|pay)[^.;]{0,120}arbitrat","delta":6,"reason":"Client pays arbitration costs"}],"suggested_fix":"Ask that arbitration be limited to fee disputes through a bar program, be optional for the client, and come with a written explanation of what rights are given up.","jurisdiction_note":"Ethics opinions (e.g. ABA Formal Op. 02-425) and state rules may require informed client consent to arbitration in retainers; verify for jurisdiction.","negation_check":true},{"id":"eng-third-party-fee-liability","category":"Engagement: costs","title":"Client liable for government filing and third-party fees","group":"engagement","base_score":35,"why_it_matters":"Government filing fees, translations, couriers and other third-party costs are usually extra and can change before filing.","triggers":["(filing|government|uscis|biometric)\\s+fees?[^.;]{0,120}(responsib|paid\\s+by|borne\\s+by|not\\s+included)","(costs|expenses)[^.;]{0,120}(translation|courier|postage|expert|evaluation)[^.;]{0,120}(client|you)","(client|you)\\s+(shall|will|is|are)\\s+(be\\s+)?(responsible|liable)\\s+for[^.;]{0,120}(fees|costs|expenses)"],"mitigators":["(estimate|estimated)[^.;]{0,120}(fees|costs)","(advance|prior)\\s+(written\\s+)?(approval|consent)[^.;]{0,120}(cost|expense)","(not\\s+to\\s+exceed|capped\\s+at)"],"mitigator_delta":-10,"aggravators":[{"pattern":"(fee\\s+(increase|change)s?|change\\s+in\\s+(government|filing)\\s+fees)[^.;]{0,120}(client|you)","delta":6,"reason":"Client bears government fee increases"},{"pattern":"(administrative|processing|handling)\\s+(fee|charge)[^.;]{0,120}(percent|%)","delta":6,"reason":"Firm markup on pass-through costs"}],"suggested_fix":"Ask for an itemized estimate of third-party costs, prior approval for expenses above a threshold, and no markup on pass-through fees."}],"qc_checks":[{"id":"qc-missing-cancellation-window","title":"No cancellation or non-renewal window found","trigger_absent":"(cancel|non[- ]?renew|terminat)[^.;]{0,120}(\\b\\d{1,4}|thirty|sixty|ninety)\\s+days|(\\b\\d{1,4}|thirty|sixty|ninety)\\s+days[^.;]{0,120}(cancel|non[- ]?renew|terminat)","severity":"Medium","message":"Could not find a stated window or deadline to cancel or prevent renewal. Ask a reviewer to confirm how and when the agreement can be ended."},{"id":"qc-missing-notice-period","title":"No notice period found","trigger_absent":"(\\b\\d{1,4}|thirty|sixty|ninety|ten|fifteen)\\s+(business\\s+|calendar\\s+)?days['’]?\\s+(prior\\s+|advance\\s+)?(written\\s+)?notice","severity":"Medium","message":"No advance notice period was detected for changes, termination or renewal. Confirm whether notice is required before key actions."},{"id":"qc-missing-notice-address","title":"No notice method or address found","trigger_absent":"notices?[^.;]{0,120}(shall|must|will)\\s+be\\s+(given|sent|delivered)|(address|email)\\s+for\\s+notices","severity":"Low","message":"No clause on how and where formal notices are sent was detected."},{"id":"qc-missing-liability-cap","title":"No limitation of liability found","trigger_absent":"limitation\\s+of\\s+liability|(aggregate|total)\\s+liability|in\\s+no\\s+event\\s+shall","severity":"Medium","message":"No liability cap was detected. Exposure for either party may be unlimited; flag for reviewer."},{"id":"qc-missing-governing-law","title":"No governing law clause found","trigger_absent":"governed\\s+by|governing\\s+law","severity":"Low","message":"No governing law clause was detected, which can make disputes less predictable."},{"id":"qc-missing-termination","title":"No termination clause found","trigger_absent":"terminat","severity":"Medium","message":"No termination language was detected. Confirm how either party can exit the agreement."},{"id":"qc-missing-scope","title":"No defined scope of services found","trigger_absent":"scope\\s+of\\s+(services|work|representation|engagement)|statement\\s+of\\s+work","severity":"Medium","message":"No scope section was detected. Unclear scope often leads to fee disputes."},{"id":"qc-missing-refund-terms","title":"No refund terms found","trigger_absent":"refund","severity":"Low","message":"No refund language was detected. For retainers and prepaid fees, confirm what happens to unearned amounts."},{"id":"qc-missing-dispute-resolution","title":"No dispute resolution clause found","trigger_absent":"dispute|arbitrat|mediat|jurisdiction|venue","severity":"Low","message":"No dispute resolution, venue or jurisdiction clause was detected."}]}</script>
+<script type="application/json" id="sample">"SAMPLE ONLY - FICTIONAL CONTRACT. This text was written to demonstrate the tool. Brightwave Cloud Ltd. and Harbor & Pine Studio LLC are invented, and this is not a real agreement or a recommended template.\n\nSOFTWARE-AS-A-SERVICE AGREEMENT\n\nThis Software-as-a-Service Agreement (the \"Agreement\") is made as of January 1, 2027 (the \"Effective Date\") between Brightwave Cloud Ltd. (\"Provider\") and Harbor & Pine Studio LLC (\"Customer\").\n\n1. Services\n\n1.1 Provider will make its hosted project-management platform (the \"Service\") available to Customer during the Term. The scope of services is limited to the Service features described in Exhibit A, plus standard email support on business days. Provider will use commercially reasonable efforts to keep the Service available 99.5% of each month.\n\n1.2 Customer may permit up to 25 employees to use the Service and is responsible for keeping its login credentials secure.\n\n2. Term and Renewal\n\n2.1 This Agreement begins on the Effective Date and has an initial term of twelve (12) months. The Agreement automatically renews for successive twelve-month periods unless Customer gives Provider at least 90 days prior written notice of non-renewal. Each renewal term will be charged at the fees then in effect.\n\n3. Fees and Payment\n\n3.1 Customer will pay the annual subscription fee shown in Exhibit A, invoiced annually in advance and due within thirty days of the invoice date.\n\n3.2 Overdue amounts accrue interest at 1.5% per month until paid in full.\n\n3.3 Provider reserves the right to change the fees, and any other terms of this Agreement, at its sole discretion and without prior notice by posting the revised terms on its website. Customer's continued use of the Service constitutes acceptance of the revised terms.\n\n4. Confidentiality\n\n4.1 Each party will keep the other party's non-public business information confidential and use it only to perform this Agreement. These confidentiality obligations shall survive for three (3) years after the Agreement ends. They do not apply to information that is publicly available or independently developed.\n\n5. Data\n\n5.1 Provider will process Customer Data solely to provide the Service and will not sell Customer Data to anyone. Provider maintains commercially reasonable security safeguards.\n\n5.2 Provider may use aggregated, de-identified data derived from the Service for any purpose, including to train machine learning models.\n\n6. Intellectual Property\n\n6.1 Provider owns the Service and all improvements to it. Customer owns its content. Customer hereby assigns to Provider all right, title and interest in any suggestions or feedback Customer provides about the Service.\n\n7. Limitation of Liability\n\n7.1 In no event shall either party be liable for indirect, incidental or consequential damages. Except for fraud, gross negligence or willful misconduct, each party's aggregate liability under this Agreement shall not exceed the fees paid in the twelve months before the claim arose.\n\n8. Indemnification\n\n8.1 Customer shall indemnify, defend and hold harmless Provider from any and all claims, losses, liabilities and expenses arising out of or relating to Customer's use of the Service, including claims caused by Provider's own negligence, without limit.\n\n9. Termination\n\n9.1 Provider may terminate this Agreement for convenience at any time by written notice to Customer, and will give a pro rata refund of any prepaid fees. Customer may terminate only for Provider's material breach that remains uncured after written notice.\n\n10. Restrictive Covenants\n\n10.1 During the Term and for two (2) years afterward, Customer shall not, directly or indirectly, compete with Provider or solicit Provider's customers or employees anywhere in the world.\n\n11. Disputes and Governing Law\n\n11.1 Any dispute arising from this Agreement shall be resolved by binding arbitration. The arbitration will be confidential. Customer waives any right to a jury trial and to participate in a class action against Provider.\n\n11.2 This Agreement is governed by the laws of the State of Delaware. The courts of Delaware have non-exclusive jurisdiction over any matter not subject to arbitration.\n\n12. General\n\n12.1 Notices must be sent by email to the addresses on the signature page and will be treated as received on the next business day.\n\n12.2 This Agreement, with Exhibit A, is the entire agreement between the parties and may be signed in counterparts.\n"</script>
+<script id="engine-js">
+/*! Red Flag & Risk Detector: detection engine. Pure, no DOM, no dependencies.
+ *  Browser: window.RFD   Node: require('./engine.js')
+ *  analyze(text, taxonomy, opts) -> { clauses, findings, qc, summary, groups, governingLaw }
+ *  opts.groups: rule groups to run (default ['core','extra']; add 'engagement' for engagement-letter rules)
+ *  Flags text patterns for lawyer review. It is not legal advice. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.RFD = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var MAX_INPUT = 200000;       // total characters accepted
+  var MAX_PASS = 5000;          // characters of one clause fed to one regex pass
+  var SPLIT_TARGET = 1800;      // overlong paragraphs are split near this size
+  var MITIGATION_CAP = 25;      // max points removed by mitigation
+  var MAX_MATCHES = 25;         // per regex per clause
+
+  var DEFAULT_GROUPS = ['core', 'extra'];
+
+  var DEFAULT_RUBRIC = {
+    High: { score_range: [70, 100] },
+    Medium: { score_range: [40, 69] },
+    Low: { score_range: [1, 39] }
+  };
+
+  /* ---------- helpers ---------- */
+
+  function compile(pattern) {
+    try {
+      if (typeof pattern !== 'string' || !pattern) return null;
+      return new RegExp(pattern, 'gi');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // All matches of a global regex in text (zero-length safe, capped).
+  function allMatches(re, text) {
+    var out = [];
+    re.lastIndex = 0;
+    var m;
+    while ((m = re.exec(text)) !== null) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
+      out.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
+      if (out.length >= MAX_MATCHES) break;
+    }
+    re.lastIndex = 0;
+    return out;
+  }
+
+  function severityFor(score, taxonomy) {
+    var rub = (taxonomy && taxonomy.severity_rubric) || DEFAULT_RUBRIC;
+    var order = ['High', 'Medium', 'Low'];
+    for (var i = 0; i < order.length; i++) {
+      var r = rub[order[i]] || DEFAULT_RUBRIC[order[i]];
+      var range = r.score_range || DEFAULT_RUBRIC[order[i]].score_range;
+      if (score >= range[0] && score <= range[1]) return order[i];
+    }
+    return score >= 70 ? 'High' : score >= 40 ? 'Medium' : 'Low';
+  }
+
+  /* ---------- clause splitting ---------- */
+
+  var HEADING_RE = new RegExp(
+    '^\\s*(?:' +
+    '\\d+(?:\\.\\d+)+\\.?\\s+\\S' +                      // 1.1  text
+    '|\\d+[.)]\\s+\\S' +                                 // 1. text / 1) text
+    '|(?:ARTICLE|Article|SECTION|Section|CLAUSE|Clause)\\s+(?:\\d+(?:\\.\\d+)*|[IVXLC]+)(?:\\s*[.:\\-\\u2013\\u2014)]|\\s*$|\\s+[A-Z])' +
+    ')'
+  );
+
+  function isHeadingLine(line) { return HEADING_RE.test(line); }
+
+  function trimRange(text, s, e) {
+    while (s < e && /\s/.test(text.charAt(s))) s++;
+    while (e > s && /\s/.test(text.charAt(e - 1))) e--;
+    return { start: s, end: e };
+  }
+
+  // Sentence ranges inside text[from,to) (absolute offsets), trimmed.
+  function sentenceRanges(text, from, to) {
+    var out = [];
+    var re = /[.!?]["')\]”’]*\s+(?=["(“‘]?[A-Z0-9])/g;
+    var seg = text.slice(from, to);
+    var last = 0, m;
+    while ((m = re.exec(seg)) !== null) {
+      var end = m.index + m[0].length;
+      out.push(trimRange(text, from + last, from + end));
+      last = end;
+    }
+    if (last < seg.length) out.push(trimRange(text, from + last, to));
+    return out.filter(function (r) { return r.end > r.start; });
+  }
+
+  // Break one block that is too long into pieces near SPLIT_TARGET at sentence boundaries.
+  function splitLongBlock(text, s, e) {
+    if (e - s <= SPLIT_TARGET) return [{ start: s, end: e }];
+    var sents = sentenceRanges(text, s, e);
+    var pieces = [];
+    var cur = null;
+    function push(r) { pieces.push(r); }
+    sents.forEach(function (sn) {
+      // hard-split a single enormous sentence at whitespace
+      var parts = [];
+      var a = sn.start;
+      while (sn.end - a > MAX_PASS - 500) {
+        var cut = text.lastIndexOf(' ', a + MAX_PASS - 500);
+        if (cut <= a) cut = a + MAX_PASS - 500;
+        parts.push({ start: a, end: cut });
+        a = cut;
+      }
+      parts.push({ start: a, end: sn.end });
+      parts.forEach(function (p) {
+        p = trimRange(text, p.start, p.end);
+        if (p.end <= p.start) return;
+        if (!cur) { cur = { start: p.start, end: p.end }; return; }
+        if (p.end - cur.start > SPLIT_TARGET) { push(cur); cur = { start: p.start, end: p.end }; }
+        else cur.end = p.end;
+      });
+    });
+    if (cur) push(cur);
+    return pieces;
+  }
+
+  function splitClauses(text) {
+    var blocks = [];
+    var cur = null;
+    var pos = 0;
+    var len = text.length;
+    function flush() {
+      if (cur) {
+        var r = trimRange(text, cur.start, cur.end);
+        if (r.end > r.start) blocks.push(r);
+        cur = null;
+      }
+    }
+    while (pos <= len) {
+      var nl = text.indexOf('\n', pos);
+      var lineEnd = nl === -1 ? len : nl;
+      var line = text.slice(pos, lineEnd);
+      if (line.trim() === '') {
+        flush();
+      } else {
+        if (cur && isHeadingLine(line)) flush();
+        if (!cur) cur = { start: pos, end: lineEnd };
+        else cur.end = lineEnd;
+      }
+      if (nl === -1) break;
+      pos = nl + 1;
+    }
+    flush();
+
+    // merge a short heading-only block into the following body block
+    var merged = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      var t = text.slice(b.start, b.end);
+      var next = blocks[i + 1];
+      if (next && t.indexOf('\n') === -1 && t.length <= 80 && isHeadingLine(t) &&
+          !isHeadingLine(text.slice(next.start, next.end).split('\n')[0]) && !/[.;]$/.test(t.replace(/^\s*\d+[.)]\s*/, '')) ) {
+        blocks[i + 1] = { start: b.start, end: next.end };
+        continue;
+      }
+      merged.push(b);
+    }
+
+    var clauses = [];
+    var parents = []; // heading-only clauses seen so far
+    merged.forEach(function (b) {
+      splitLongBlock(text, b.start, b.end).forEach(function (p) {
+        var ctext = text.slice(p.start, p.end);
+        var info = headingInfo(ctext);
+        var heading = info.heading;
+        if (!heading && info.num && info.num.indexOf('.') !== -1) {
+          for (var k = parents.length - 1; k >= 0; k--) {
+            if (info.num.indexOf(parents[k].num + '.') === 0) { heading = parents[k].heading; break; }
+          }
+        }
+        var cl = {
+          id: 'c' + (clauses.length + 1),
+          start: p.start,
+          end: p.end,
+          text: ctext,
+          heading: heading,
+          locator: info.locator,
+          headingOnly: info.only
+        };
+        if (info.only) parents.push({ num: info.num, heading: info.heading });
+        clauses.push(cl);
+      });
+    });
+    return clauses;
+  }
+
+  var SMALL_WORDS = /^(a|an|and|the|of|to|in|on|for|or|by|with|at|as|vs)$/i;
+  function looksLikeTitle(h) {
+    var words = h.split(/\s+/);
+    if (words.length > 9) return false;
+    return words.every(function (w) { return SMALL_WORDS.test(w) || /^[A-Z0-9("&]/.test(w); });
+  }
+
+  function headingInfo(ctext) {
+    var none = { heading: null, locator: null, num: null, only: false };
+    var first = ctext.split('\n')[0];
+    if (!isHeadingLine(first)) return none;
+    var m = /^\s*(?:(ARTICLE|Article|SECTION|Section|CLAUSE|Clause)\s+)?(\d+(?:\.\d+)*|[IVXLC]+)\s*[.):\-\u2013\u2014]?\s*(.*)$/.exec(first);
+    if (!m) return none;
+    var word = m[1] ? (m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase()) : 'Section';
+    var info = { heading: null, locator: word + ' ' + m[2], num: m[2], only: false };
+    var rest = (m[3] || '').trim();
+    var hm;
+    if (ctext.indexOf('\n') === -1 && rest && rest.length <= 90 && (hm = /^([A-Z][^.:\n]{0,80}?)\s*[.:]?$/.exec(rest)) && looksLikeTitle(hm[1])) {
+      info.heading = hm[1]; info.only = true;           // heading on its own line
+    } else if ((hm = /^([A-Z][^.:\n]{1,60}?)\s*[:\u2013\u2014]\s+\S/.exec(rest)) && looksLikeTitle(hm[1])) {
+      info.heading = hm[1];                              // "Title: body"
+    } else if ((hm = /^([A-Z][^.:\n]{1,40}?)\.\s+[A-Z]/.exec(rest)) && looksLikeTitle(hm[1])) {
+      info.heading = hm[1];                              // "Title. Body"
+    }
+    return info;
+  }
+
+  /* ---------- negation ---------- */
+
+  var NEG_RE = /\b(?:not|no(?!\s+(?:later|earlier|less|more)\b)|never|neither|nor|without)\b/i;
+
+  // Preservation / savings language: "nothing in this ... waives/limits/prevents",
+  // "does not waive/limit", "preserves its right to", "retains the right to".
+  var PRESERVE_RE = new RegExp(
+    '\\bnothing\\s+(?:in|herein|contained|else)\\b' +
+    '|\\bdoes\\s+not\\s+(?:waive|limit|restrict|prevent|affect|impair)\\b' +
+    '|\\bshall\\s+not\\s+(?:be\\s+(?:construed|deemed|interpreted)\\s+(?:to|as)\\s+)?(?:waive|limit|restrict|prevent|impair)' +
+    '|\\b(?:preserves?|retains?)\\s+(?:its|their|the|each|all|his|her|any)?\\s*(?:party[\'\u2019]?s?\\s+)?(?:right|rights)\\s+(?:to|of)\\b' +
+    '|\\bis\\s+not\\s+waived\\b', 'i');
+
+  function isNegated(ctext, matchStart) {
+    var from = Math.max(0, matchStart - 40);
+    var win = ctext.slice(from, matchStart);
+    var cut = Math.max(win.lastIndexOf('.'), win.lastIndexOf(';'), win.lastIndexOf(':'), win.lastIndexOf('!'), win.lastIndexOf('?'));
+    if (cut >= 0) win = win.slice(cut + 1);
+    if (NEG_RE.test(win)) return true;
+    // wider same-sentence window for preservation language
+    var from2 = Math.max(0, matchStart - 120);
+    var win2 = ctext.slice(from2, matchStart);
+    var cut2 = Math.max(win2.lastIndexOf('.'), win2.lastIndexOf(';'), win2.lastIndexOf(':'), win2.lastIndexOf('!'), win2.lastIndexOf('?'));
+    if (cut2 >= 0) win2 = win2.slice(cut2 + 1);
+    return PRESERVE_RE.test(win2);
+  }
+
+  /* ---------- taxonomy compilation (cached) ---------- */
+
+  var cache = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+  function compileList(list, fn) {
+    var out = [];
+    (Array.isArray(list) ? list : []).forEach(function (item) {
+      var c = fn(item);
+      if (c) out.push(c);
+    });
+    return out;
+  }
+
+  function compileTaxonomy(tax) {
+    if (cache && cache.has(tax)) return cache.get(tax);
+    var rules = compileList(tax && tax.rules, function (r) {
+      if (!r || typeof r !== 'object') return null;
+      var triggers = compileList(r.triggers, compile);
+      if (!triggers.length) return null; // rule can never fire
+      return {
+        rule: r,
+        triggers: triggers,
+        mitigators: compileList(r.mitigators, compile),
+        aggravators: compileList(r.aggravators, function (a) {
+          if (!a) return null;
+          var re = compile(a.pattern);
+          return re ? { re: re, delta: Number(a.delta) || 0, reason: a.reason || '' } : null;
+        })
+      };
+    });
+    var mods = compileList(tax && tax.scoring && tax.scoring.modifiers, function (m) {
+      if (!m) return null;
+      var re = compile(m.pattern);
+      return re ? { re: re, id: m.id, delta: Number(m.delta) || 0, reason: m.reason || '' } : null;
+    });
+    var qc = compileList(tax && tax.qc_checks, function (q) {
+      if (!q) return null;
+      var re = compile(q.trigger_absent);
+      return re ? { re: re, q: q } : null;
+    });
+    var out = { rules: rules, mods: mods, qc: qc };
+    if (cache) cache.set(tax, out);
+    return out;
+  }
+
+  /* ---------- scoring one rule on one clause ---------- */
+
+  function evalRule(cr, ctext, offset, tax, mods) {
+    var rule = cr.rule;
+    var matches = [];
+    var useNegation = rule.negation_check === true;
+    cr.triggers.forEach(function (re) {
+      allMatches(re, ctext).forEach(function (m) {
+        if (useNegation && isNegated(ctext, m.start)) return;
+        matches.push(m);
+      });
+    });
+    if (!matches.length) return null;
+    matches.sort(function (a, b) { return a.start - b.start || b.end - a.end; });
+    // drop exact duplicates
+    var uniq = [];
+    matches.forEach(function (m) {
+      var p = uniq[uniq.length - 1];
+      if (!p || p.start !== m.start || p.end !== m.end) uniq.push(m);
+    });
+    matches = uniq;
+
+    var aggravatorsFound = [];
+    var mitigatorsFound = [];
+    var aggSum = 0;
+    var mitSum = 0;
+
+    cr.aggravators.forEach(function (a) {
+      var ms = allMatches(a.re, ctext);
+      if (!ms.length) return;
+      var d = a.delta;
+      var rec = { kind: 'rule', text: ms[0].text, start: offset + ms[0].start, end: offset + ms[0].end, delta: d, reason: a.reason };
+      if (d >= 0) { aggSum += d; aggravatorsFound.push(rec); }
+      else { mitSum += d; mitigatorsFound.push(rec); }
+    });
+
+    var ruleMitCounted = false;
+    var ruleMitDelta = Number(rule.mitigator_delta) || 0;
+    cr.mitigators.forEach(function (re) {
+      var ms = allMatches(re, ctext);
+      if (!ms.length) return;
+      var d = 0;
+      if (!ruleMitCounted) { d = ruleMitDelta; mitSum += d; ruleMitCounted = true; }
+      mitigatorsFound.push({ kind: 'rule', text: ms[0].text, start: offset + ms[0].start, end: offset + ms[0].end, delta: d, reason: 'Mitigating language' });
+    });
+
+    var skipMods = Array.isArray(rule.ignore_modifiers) ? rule.ignore_modifiers : [];
+    mods.forEach(function (m) {
+      if (skipMods.indexOf(m.id) !== -1) return;
+      var ms = allMatches(m.re, ctext);
+      if (!ms.length) return;
+      var rec = { kind: 'modifier', id: m.id, text: ms[0].text, start: offset + ms[0].start, end: offset + ms[0].end, delta: m.delta, reason: m.reason };
+      if (m.delta >= 0) { aggSum += m.delta; aggravatorsFound.push(rec); }
+      else { mitSum += m.delta; mitigatorsFound.push(rec); }
+    });
+
+    var base = Number(rule.base_score) || 0;
+    var pre = base + aggSum;
+    var mitigation = Math.max(-MITIGATION_CAP, Math.min(0, mitSum));
+    var score = Math.round(Math.max(1, Math.min(100, pre + mitigation)));
+
+    return {
+      rule: rule,
+      score: score,
+      base: base,
+      preMitigation: Math.max(1, Math.min(100, pre)),
+      mitigation: mitigation,
+      matches: matches,
+      aggravatorsFound: aggravatorsFound,
+      mitigatorsFound: mitigatorsFound
+    };
+  }
+
+  /* ---------- governing law ---------- */
+
+  function detectGoverningLaw(text) {
+    var m = /governed\s+by[^.;]{0,80}?\blaws?\s+of\s+(?:the\s+)?(?:(?:State|Commonwealth|Province)\s+of\s+)?([A-Z][A-Za-z]+(?:\s+(?:and\s+)?[A-Z][A-Za-z]+){0,2})/.exec(text.slice(0, MAX_INPUT));
+    return m ? m[1].replace(/\s+(Without|Excluding|Exclusive)$/i, '') : null;
+  }
+
+  /* ---------- analyze ---------- */
+
+  function analyze(text, taxonomy, opts) {
+    if (typeof text !== 'string') throw new TypeError('analyze: text must be a string');
+    if (text.length > MAX_INPUT) {
+      throw new Error('Input too large: ' + text.length + ' characters exceeds the limit of ' + MAX_INPUT + '.');
+    }
+    opts = opts || {};
+    taxonomy = taxonomy || { rules: [] };
+    var ct = compileTaxonomy(taxonomy);
+    // Default: core + extra only. Engagement-letter rules run only when asked for.
+    var groups = Array.isArray(opts.groups) && opts.groups.length ? opts.groups.slice() : DEFAULT_GROUPS.slice();
+    var rules = ct.rules.filter(function (r) { return groups.indexOf(r.rule.group || 'core') !== -1; });
+
+    var clauses = splitClauses(text);
+    var findings = [];
+
+    clauses.forEach(function (cl) {
+      if (cl.headingOnly) return;
+      var ctext = cl.text.length > MAX_PASS ? cl.text.slice(0, MAX_PASS) : cl.text;
+      var hits = [];
+      rules.forEach(function (cr, idx) {
+        var h = evalRule(cr, ctext, cl.start, taxonomy, ct.mods);
+        if (h) { h.order = idx; hits.push(h); }
+      });
+      if (!hits.length) return;
+      hits.sort(function (a, b) { return b.score - a.score || b.base - a.base || a.order - b.order; });
+      var best = hits[0];
+      var r = best.rule;
+
+      var matches = best.matches.map(function (m) {
+        return { start: cl.start + m.start, end: cl.start + m.end, text: m.text };
+      });
+
+      // quote = the sentence containing the first match (what the UI highlights)
+      var sents = sentenceRanges(text, cl.start, cl.start + ctext.length);
+      var first = matches[0];
+      var q = { start: first.start, end: first.end };
+      for (var i = 0; i < sents.length; i++) {
+        if (first.start >= sents[i].start && first.start < sents[i].end) { q = { start: sents[i].start, end: Math.max(sents[i].end, first.end) }; break; }
+      }
+      var lead = /^\s*\d+(?:\.\d+)*[.)]?\s+(?=\S)/.exec(text.slice(q.start, q.end));
+      if (lead && q.start === cl.start && q.end - q.start - lead[0].length > 10) q.start += lead[0].length;
+      q.text = text.slice(q.start, q.end);
+
+      findings.push({
+        id: 'f-' + cl.id,
+        clauseId: cl.id,
+        ruleId: r.id,
+        category: r.category,
+        title: r.title,
+        group: r.group,
+        severity: severityFor(best.score, taxonomy),
+        score: best.score,
+        baseScore: best.preMitigation,
+        mitigation: best.mitigation,
+        matches: matches,
+        quote: q,
+        why: r.why_it_matters || '',
+        fix: r.suggested_fix || '',
+        jurisdictionNote: r.jurisdiction_note || '',
+        mitigatorsFound: best.mitigatorsFound,
+        aggravatorsFound: best.aggravatorsFound,
+        alsoMatches: hits.slice(1).map(function (h) { return h.rule.id; }),
+        _pos: cl.start
+      });
+    });
+
+    findings.sort(function (a, b) { return b.score - a.score || a._pos - b._pos; });
+    findings.forEach(function (f, i) { f.rank = i + 1; delete f._pos; });
+
+    var qc = [];
+    ct.qc.forEach(function (c) {
+      c.re.lastIndex = 0;
+      var found = c.re.test(text);
+      c.re.lastIndex = 0;
+      if (!found) qc.push({ id: c.q.id, title: c.q.title, severity: c.q.severity, message: c.q.message });
+    });
+
+    var summary = { High: 0, Medium: 0, Low: 0, total: findings.length };
+    summary.clauses = clauses.filter(function (c) { return !c.headingOnly; }).length;
+    findings.forEach(function (f) { summary[f.severity]++; });
+
+    return {
+      clauses: clauses,
+      findings: findings,
+      qc: qc,
+      summary: summary,
+      groups: groups,
+      governingLaw: detectGoverningLaw(text)
+    };
+  }
+
+  return {
+    analyze: analyze,
+    splitClauses: splitClauses,
+    detectGoverningLaw: detectGoverningLaw,
+    severityFor: severityFor,
+    MAX_INPUT: MAX_INPUT,
+    MAX_PASS: MAX_PASS,
+    MITIGATION_CAP: MITIGATION_CAP
+  };
+});
+
+</script>
+<script>
+(function () {
+'use strict';
+
+/* ================= constants ================= */
+var LIMITS = { fileBytes: 2 * 1024 * 1024, chars: 200000, min: 100 };
+var SEV = ['High', 'Medium', 'Low'];
+var DISCLAIMER = 'For lawyer review, not legal advice. This tool flags text patterns; it does not interpret your contract or replace an attorney.';
+var CATS = ['Liability & Indemnity', 'Termination', 'Payment & Fees', 'Term & Auto-renewal', 'IP & Confidentiality', 'Data & Privacy', 'Warranties & Disclaimers', 'Disputes & Governing Law', 'Other'];
+var CAT_BY_RULE = {
+  'one-sided-liability-limit': 'Liability & Indemnity', 'broad-indemnification': 'Liability & Indemnity', 'personal-guarantee': 'Liability & Indemnity',
+  'unilateral-termination-convenience': 'Termination',
+  'unilateral-change': 'Payment & Fees', 'late-fees-liquidated-damages': 'Payment & Fees', 'one-way-fee-shifting': 'Payment & Fees',
+  'eng-non-refundable-fees': 'Payment & Fees', 'eng-fee-change-without-consent': 'Payment & Fees', 'eng-third-party-fee-liability': 'Payment & Fees',
+  'auto-renewal-trap': 'Term & Auto-renewal',
+  'ip-assignment-overreach': 'IP & Confidentiality', 'confidentiality-one-way-perpetual': 'IP & Confidentiality',
+  'data-use-sale-rights': 'Data & Privacy',
+  'eng-waiver-client-rights': 'Warranties & Disclaimers',
+  'jury-waiver-arbitration': 'Disputes & Governing Law', 'distant-governing-law-venue': 'Disputes & Governing Law', 'eng-mandatory-arbitration': 'Disputes & Governing Law',
+  'non-compete-restrictive-covenant': 'Other', 'eng-unclear-scope': 'Other'
+};
+var TAX = JSON.parse(document.getElementById('taxonomy').textContent);
+var SAMPLE = JSON.parse(document.getElementById('sample').textContent);
+
+/* ================= tiny DOM helpers (textContent only) ================= */
+function $(id) { return document.getElementById(id); }
+function el(tag, o, kids) {
+  var n = document.createElement(tag);
+  o = o || {};
+  if (o.cls) n.className = o.cls;
+  if (o.text != null) n.textContent = o.text;
+  if (o.attrs) Object.keys(o.attrs).forEach(function (k) { n.setAttribute(k, o.attrs[k]); });
+  if (o.on) Object.keys(o.on).forEach(function (k) { n.addEventListener(k, o.on[k]); });
+  (kids || []).forEach(function (c) { if (c) n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+  return n;
+}
+var NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs) { var n = document.createElementNS(NS, tag); Object.keys(attrs).forEach(function (k) { n.setAttribute(k, attrs[k]); }); return n; }
+function icon(kind) {
+  var s = svgEl('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', 'class': 'ico' });
+  if (kind === 'High') {
+    s.appendChild(svgEl('polygon', { points: '8,1.5 15.3,14.2 0.7,14.2', fill: 'currentColor' }));
+    s.appendChild(svgEl('rect', { x: '7.2', y: '5.6', width: '1.6', height: '4.6', fill: '#fff' }));
+    s.appendChild(svgEl('circle', { cx: '8', cy: '12.2', r: '.95', fill: '#fff' }));
+  } else if (kind === 'Medium') {
+    s.appendChild(svgEl('polygon', { points: '8,1 15,8 8,15 1,8', fill: 'currentColor' }));
+  } else if (kind === 'Low') {
+    s.appendChild(svgEl('circle', { cx: '8', cy: '8', r: '6.5', fill: 'currentColor' }));
+  } else if (kind === 'check') {
+    s.appendChild(svgEl('path', { d: 'M2.8 8.6l3.3 3.3L13.2 4.6', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+  return s;
+}
+function badge(sev) { return el('span', { cls: 'badge sev-' + sev }, [icon(sev), el('span', { text: sev })]); }
+function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+function fmtSize(b) { return b >= 1048576 ? (Math.ceil(b / 10485.76) / 100).toFixed(2) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+function fmtNum(n) { return n.toLocaleString('en-US'); }
+function words(t) { var m = t.match(/\S+/g); return m ? m.length : 0; }
+function trunc(s, n) { s = s.replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n) : s; }
+var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+var mqMobile = window.matchMedia('(max-width: 1023.98px)');
+function isMobile() { return mqMobile.matches; }
+
+/* ================= state ================= */
+var state = {
+  text: '', result: null, findings: [], reviewed: new Set(), dismissed: new Set(), selectedId: null,
+  fSev: new Set(), fCat: new Set(), mode: 'input', docxNote: false, fileName: '', run: null, groups: ['core', 'extra'],
+  nodeMap: [], lastOpener: null, mobileDetail: false
+};
+
+/* ================= live region / toast ================= */
+var liveEl = $('live');
+function announce(msg) { liveEl.textContent = ''; setTimeout(function () { liveEl.textContent = msg; }, 30); }
+var toastTimer = null;
+function toast(msg, actionLabel, action) {
+  var host = $('toastHost');
+  host.replaceChildren();
+  clearTimeout(toastTimer);
+  var kids = [el('span', { text: msg })];
+  if (actionLabel) kids.push(el('button', { cls: 'tbtn', text: actionLabel, attrs: { type: 'button' }, on: { click: function () { host.replaceChildren(); clearTimeout(toastTimer); action(); } } }));
+  host.appendChild(el('div', { cls: 'toast' }, kids));
+  toastTimer = setTimeout(function () { host.replaceChildren(); }, 6000);
+}
+
+/* ================= dialogs ================= */
+function confirmDialog(title, msg, okLabel) {
+  return new Promise(function (resolve) {
+    var d = $('confirmDlg'), opener = document.activeElement;
+    $('confirmTitle').textContent = title; $('confirmMsg').textContent = msg; $('confirmYes').textContent = okLabel;
+    function done(v) { $('confirmYes').onclick = $('confirmNo').onclick = null; d.onclose = null; if (d.open) d.close(); if (opener && opener.focus) opener.focus(); resolve(v); }
+    $('confirmYes').onclick = function () { done(true); };
+    $('confirmNo').onclick = function () { done(false); };
+    d.onclose = function () { done(false); };
+    d.showModal();
+  });
+}
+
+/* ================= input view ================= */
+var src = $('src');
+function updateInputMeta() {
+  var n = src.value.length;
+  $('srcMeta').textContent = fmtNum(n) + ' characters, ' + fmtNum(words(src.value)) + ' words';
+  var tooShort = n > 0 && n < LIMITS.min;
+  $('srcHint').textContent = tooShort ? 'Add at least 100 characters so there is something to review.' : '';
+  $('btnAnalyze').disabled = n < LIMITS.min;
+}
+src.addEventListener('input', updateInputMeta);
+src.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (!$('btnAnalyze').disabled) startAnalysis(src.value); }
+});
+$('btnAnalyze').addEventListener('click', function () { startAnalysis(src.value); });
+$('btnSample').addEventListener('click', function () {
+  src.value = SAMPLE; state.fileName = ''; state.docxNote = false; $('fileErr').replaceChildren(); renderChip(); updateInputMeta();
+  startAnalysis(SAMPLE);
+});
+
+function fileError(msg) {
+  var box = $('fileErr'); box.replaceChildren();
+  if (!msg) return;
+  box.appendChild(el('div', { cls: 'inline-err' }, [neutralIcon(), el('span', { text: msg })]));
+}
+function neutralIcon() {
+  var s = svgEl('svg', { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false', 'class': 'ico' });
+  s.appendChild(svgEl('circle', { cx: '8', cy: '8', r: '6.5', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5' }));
+  s.appendChild(svgEl('rect', { x: '7.25', y: '4', width: '1.5', height: '5', fill: 'currentColor' }));
+  s.appendChild(svgEl('circle', { cx: '8', cy: '11.3', r: '.95', fill: 'currentColor' }));
+  return s;
+}
+function renderChip() {
+  var h = $('chipHost'); h.replaceChildren();
+  if (!state.fileName) return;
+  var chip = el('span', { cls: 'filechip' }, [el('span', { text: state.fileName }),
+    el('button', { cls: 'tbtn', text: 'Remove', attrs: { type: 'button', 'aria-label': 'Remove file ' + state.fileName }, on: { click: function () { state.fileName = ''; state.docxNote = false; renderChip(); } } })]);
+  h.appendChild(chip);
+  if (state.docxNote) h.appendChild(el('p', { cls: 'fine', text: "Converted from .docx. Formatting, comments and tracked changes aren't shown." }));
+}
+
+var UNSUPPORTED = { pdf: 'PDFs', doc: '.doc files', rtf: '.rtf files', odt: '.odt files', png: 'Images', jpg: 'Images', jpeg: 'Images', gif: 'Images', webp: 'Images', bmp: 'Images', tif: 'Images', tiff: 'Images', heic: 'Images', svg: 'Images' };
+function extOf(name) { var m = /\.([A-Za-z0-9]+)$/.exec(name || ''); return m ? m[1].toLowerCase() : ''; }
+
+async function handleFile(file) {
+  fileError('');
+  var ext = extOf(file.name);
+  var type = file.type || '';
+  var label = UNSUPPORTED[ext] || (/^image\//.test(type) ? 'Images' : (type === 'application/pdf' ? 'PDFs' : null));
+  if (label) {
+    fileError(label + " aren't supported" + (label === 'PDFs' ? ' yet' : '') + '. Copy the text and paste it here, or save the file as .docx or .txt.');
+    return;
+  }
+  if (['txt', 'md', 'markdown', 'docx'].indexOf(ext) === -1) {
+    fileError((ext ? '.' + ext : 'This type of') + " files aren't supported. Use .txt, .md or .docx, or paste the text.");
+    return;
+  }
+  if (file.size > LIMITS.fileBytes) { fileError('This file is ' + fmtSize(file.size) + '. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.'); return; }
+  var text;
+  try {
+    var buf = await file.arrayBuffer();
+    if (ext === 'docx') text = await docxToText(buf); else text = decodeUtf8(buf);
+  } catch (e) { fileError("We couldn't read this file as text. Try saving it again as .txt or .docx."); return; }
+  text = text.replace(/\r\n?/g, '\n');
+  if (!text.trim()) { fileError("We couldn't read this file as text. Try saving it again as .txt or .docx."); return; }
+  if (text.length > LIMITS.chars) { fileError('This file is ' + fmtNum(text.length) + ' characters. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.'); return; }
+  src.value = text; state.fileName = file.name; state.docxNote = ext === 'docx';
+  renderChip(); updateInputMeta(); announce('File loaded: ' + file.name);
+}
+function decodeUtf8(buf) {
+  var t = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  if (t.charCodeAt(0) === 0xFEFF) t = t.slice(1);
+  if (t.indexOf('\u0000') !== -1) throw new Error('binary');
+  return t;
+}
+$('btnChoose').addEventListener('click', function () { $('file').click(); });
+$('file').addEventListener('change', function () { var f = this.files && this.files[0]; this.value = ''; if (f) handleFile(f); });
+var drop = $('drop');
+['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+drop.addEventListener('drop', function (e) {
+  var fl = e.dataTransfer && e.dataTransfer.files;
+  if (!fl || !fl.length) return;
+  if (fl.length > 1) { fileError('Please add one file at a time.'); return; }
+  handleFile(fl[0]);
+});
+window.addEventListener('dragover', function (e) { e.preventDefault(); });
+window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+/* ---- .docx: read the zip central directory by hand, inflate word/document.xml ---- */
+function u16(d, o) { return d.getUint16(o, true); }
+function u32(d, o) { return d.getUint32(o, true); }
+async function inflateRaw(bytes, maxOut) {
+  var ds = new DecompressionStream('deflate-raw');
+  var w = ds.writable.getWriter();
+  w.write(bytes).catch(function () {}); w.close().catch(function () {});
+  var r = ds.readable.getReader(), chunks = [], total = 0;
+  for (;;) {
+    var x = await r.read();
+    if (x.done) break;
+    total += x.value.length;
+    if (total > maxOut) { try { await r.cancel(); } catch (e) {} throw new Error('too big'); }
+    chunks.push(x.value);
+  }
+  var out = new Uint8Array(total), p = 0;
+  chunks.forEach(function (c) { out.set(c, p); p += c.length; });
+  return out;
+}
+var MAX_XML = 10 * 1024 * 1024;
+async function docxToText(buf) {
+  var bytes = new Uint8Array(buf), dv = new DataView(buf);
+  if (bytes.length < 22 || u32(dv, 0) !== 0x04034b50) throw new Error('not a zip');
+  var eocd = -1;
+  for (var i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65535); i--) { if (u32(dv, i) === 0x06054b50) { eocd = i; break; } }
+  if (eocd < 0) throw new Error('no eocd');
+  var count = u16(dv, eocd + 10), cdOff = u32(dv, eocd + 16);
+  if (count === 0xFFFF || cdOff === 0xFFFFFFFF) throw new Error('zip64');
+  var p = cdOff, entry = null;
+  for (var n = 0; n < count; n++) {
+    if (p + 46 > bytes.length || u32(dv, p) !== 0x02014b50) throw new Error('bad cd');
+    var nameLen = u16(dv, p + 28), extraLen = u16(dv, p + 30), cmtLen = u16(dv, p + 32);
+    var name = new TextDecoder('utf-8').decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    if (name === 'word/document.xml') { entry = { method: u16(dv, p + 10), csize: u32(dv, p + 20), usize: u32(dv, p + 24), off: u32(dv, p + 42) }; break; }
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  if (!entry) throw new Error('no document.xml');
+  if (u32(dv, entry.off) !== 0x04034b50) throw new Error('bad local header');
+  var dataStart = entry.off + 30 + u16(dv, entry.off + 26) + u16(dv, entry.off + 28);
+  if (dataStart + entry.csize > bytes.length) throw new Error('truncated');
+  if (entry.usize > MAX_XML) throw new Error('too big');
+  var raw = bytes.subarray(dataStart, dataStart + entry.csize), xmlBytes;
+  if (entry.method === 0) xmlBytes = raw;
+  else if (entry.method === 8) xmlBytes = await inflateRaw(raw, MAX_XML);
+  else throw new Error('method');
+  if (xmlBytes.length > MAX_XML) throw new Error('too big');
+  var xml = new TextDecoder('utf-8').decode(xmlBytes);
+  if (/<!DOCTYPE/i.test(xml)) throw new Error('doctype');
+  var doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('xml');
+  return docxXmlToText(doc);
+}
+function docxXmlToText(doc) {
+  var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  function ln(n) { return n.namespaceURI === W ? n.localName : ''; }
+  function paraText(p) {
+    var out = '';
+    (function walk(n) {
+      for (var c = n.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType !== 1) continue;
+        var t = ln(c);
+        if (t === 'del' || t === 'pPr' || t === 'instrText' || t === 'delText') continue;
+        if (t === 't') out += c.textContent;
+        else if (t === 'tab') out += '\t';
+        else if (t === 'br' || t === 'cr') out += '\n';
+        else walk(c);
+      }
+    })(p);
+    return out;
+  }
+  var blocks = [];
+  (function walk(n) {
+    for (var c = n.firstChild; c; c = c.nextSibling) {
+      if (c.nodeType !== 1) continue;
+      var t = ln(c);
+      if (t === 'p') blocks.push(paraText(c));
+      else if (t === 'tbl') {
+        var rows = [];
+        Array.prototype.forEach.call(c.getElementsByTagNameNS(W, 'tr'), function (tr) {
+          var cells = [];
+          Array.prototype.forEach.call(tr.getElementsByTagNameNS(W, 'p'), function (p) { var s = paraText(p); if (s.trim()) cells.push(s); });
+          if (cells.length) rows.push(cells.join('\n'));
+        });
+        blocks.push(rows.join('\n'));
+      } else if (t !== 'del') walk(c);
+    }
+  })(doc.documentElement);
+  return blocks.filter(function (b) { return b.trim() !== ''; }).join('\n\n');
+}
+
+/* ================= analysis ================= */
+function startAnalysis(text) {
+  if (text.length < LIMITS.min) { $('srcHint').textContent = 'Add at least 100 characters so there is something to review.'; return; }
+  if (text.length > LIMITS.chars) {
+    fileError('This text is ' + fmtNum(text.length) + ' characters. The limit is 2 MB or 200,000 characters. Try pasting the sections you need.');
+    return;
+  }
+  fileError('');
+  $('errPanel').hidden = true;
+  state.text = text.replace(/\r\n?/g, '\n');
+  state.groups = $('optEng').checked ? ['core', 'extra', 'engagement'] : ['core', 'extra'];
+  state.reviewed = new Set(); state.dismissed = new Set(); state.fSev = new Set(); state.fCat = new Set();
+  var run = { id: Date.now(), shown: false, shownAt: 0, timer: null, worker: null, cancelled: false, url: null };
+  state.run = run;
+  setMode('pending');
+  run.timer = setTimeout(function () {
+    if (run.cancelled || state.run !== run) return;
+    run.shown = true; run.shownAt = Date.now(); showAnalyzing();
+  }, 300);
+  function finish(res, err) {
+    if (run.cancelled || state.run !== run) return;
+    var wait = run.shown ? Math.max(0, 600 - (Date.now() - run.shownAt)) : 0;
+    setTimeout(function () {
+      if (run.cancelled || state.run !== run) return;
+      clearTimeout(run.timer);
+      if (run.worker) { run.worker.terminate(); run.worker = null; }
+      if (run.url) { URL.revokeObjectURL(run.url); run.url = null; }
+      state.run = null;
+      if (err) { showError(); return; }
+      showResults(res);
+    }, wait);
+  }
+  function syncRun() {
+    setTimeout(function () {
+      try { finish(RFD.analyze(state.text, TAX, { groups: state.groups }), null); } catch (e) { finish(null, e); }
+    }, 0);
+  }
+  try {
+    var wsrc = $('engine-js').textContent + '\nself.onmessage=function(e){try{self.postMessage({ok:true,result:RFD.analyze(e.data.text,e.data.taxonomy,{groups:e.data.groups})})}catch(err){self.postMessage({ok:false,message:String(err&&err.message||err)})}};';
+    run.url = URL.createObjectURL(new Blob([wsrc], { type: 'text/javascript' }));
+    run.worker = new Worker(run.url);
+    run.worker.onmessage = function (e) { e.data.ok ? finish(e.data.result, null) : finish(null, new Error(e.data.message)); };
+    run.worker.onerror = function (ev) { ev.preventDefault(); if (run.worker) { run.worker.terminate(); run.worker = null; } finish(null, new Error('worker error')); };
+    run.worker.postMessage({ text: state.text, taxonomy: TAX, groups: state.groups });
+  } catch (e) {
+    run.worker = null;
+    if (state.text.length <= 50000) syncRun(); else finish(null, e);
+  }
+}
+function showAnalyzing() {
+  setMode('analyzing');
+  renderPlainContract();
+  var steps = ['Reading clauses', 'Matching risk patterns', 'Ranking findings'], i = 0;
+  $('stepText').textContent = steps[0];
+  var run = state.run;
+  (function tick() { if (!state.run || state.run !== run) return; $('stepText').textContent = steps[i % 3]; i++; run.stepTimer = setTimeout(tick, 700); })();
+  announce('Analyzing your contract');
+}
+$('btnCancel').addEventListener('click', function () {
+  var run = state.run;
+  if (run) { run.cancelled = true; clearTimeout(run.timer); clearTimeout(run.stepTimer); if (run.worker) run.worker.terminate(); if (run.url) URL.revokeObjectURL(run.url); state.run = null; }
+  setMode('input'); src.focus(); announce('Analysis cancelled. Your text is unchanged.');
+});
+function showError() {
+  setMode('input');
+  $('errPanel').hidden = false;
+  $('btnRetry').focus();
+}
+$('btnRetry').addEventListener('click', function () { startAnalysis(src.value); });
+$('btnErrEdit').addEventListener('click', function () { $('errPanel').hidden = true; src.focus(); });
+
+function viewModel(res) {
+  var byId = {};
+  res.clauses.forEach(function (c) { byId[c.id] = c; });
+  return res.findings.map(function (f) {
+    var c = byId[f.clauseId] || {};
+    var m = {};
+    Object.keys(f).forEach(function (k) { m[k] = f[k]; });
+    m.dcat = CAT_BY_RULE[f.ruleId] || 'Other';
+    m.heading = c.heading || null;
+    m.locator = c.locator || null;
+    m.ctitle = c.heading ? ((c.locator ? c.locator + ' ' : '') + c.heading) : f.title;
+    return m;
+  });
+}
+function showResults(res) {
+  state.result = res;
+  state.findings = viewModel(res);
+  state.selectedId = state.findings.length ? state.findings[0].id : null;
+  state.mobileDetail = false;
+  document.body.dataset.mdetail = '0';
+  setMode(state.findings.length ? 'results' : 'zero');
+  renderAll();
+  var s = summaryCounts();
+  announce(state.findings.length
+    ? 'Analysis complete. ' + plural(s.total, 'finding') + ': ' + s.High + ' High, ' + s.Medium + ' Medium, ' + s.Low + ' Low.'
+    : 'Analysis complete. No clauses matched our risk patterns.');
+  var h = isMobile() ? $('stripHeading') : $('resultsHead');
+  if (isMobile()) setTab('contract', true);
+  h.focus({ preventScroll: true });
+  if (state.selectedId) requestAnimationFrame(function () { scrollToFinding(state.selectedId, true); });
+}
+
+/* ================= mode ================= */
+function setMode(m) {
+  state.mode = m;
+  document.body.dataset.mode = m === 'pending' ? 'input' : m;
+  $('contractText').setAttribute('aria-busy', m === 'analyzing' ? 'true' : 'false');
+  var inRes = m === 'results' || m === 'zero';
+  $('btnExport').disabled = !inRes;
+  if (m !== 'results' && m !== 'zero') { closeMenu(); }
+  $('marksNote').hidden = !(state.reviewed.size || state.dismissed.size);
+  if (m === 'input' || m === 'pending') updateInputMeta();
+  window.scrollTo(0, 0);
+}
+$('btnEdit').addEventListener('click', function () { setMode('input'); $('marksNote').hidden = !(state.reviewed.size || state.dismissed.size); src.focus(); });
+$('btnNew').addEventListener('click', async function () {
+  if (state.reviewed.size || state.dismissed.size) { if (!(await confirmDialog('Start over?', 'Your review marks will be lost.', 'Start over'))) return; }
+  resetAll();
+});
+function resetAll() {
+  state.reviewed = new Set(); state.dismissed = new Set(); state.result = null; state.findings = []; state.selectedId = null; state.fileName = ''; state.docxNote = false;
+  src.value = ''; renderChip(); fileError(''); setMode('input'); updateInputMeta(); src.focus();
+}
+window.addEventListener('beforeunload', function (e) {
+  if (state.reviewed.size || state.dismissed.size) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ================= derived data ================= */
+function openFindings() { return state.findings.filter(function (f) { return !state.dismissed.has(f.id); }); }
+function visibleFindings() {
+  return openFindings().filter(function (f) {
+    return (!state.fSev.size || state.fSev.has(f.severity)) && (!state.fCat.size || state.fCat.has(f.dcat));
+  });
+}
+function summaryCounts() {
+  var o = openFindings(), s = { High: 0, Medium: 0, Low: 0, total: o.length };
+  o.forEach(function (f) { s[f.severity]++; });
+  return s;
+}
+function findingById(id) { for (var i = 0; i < state.findings.length; i++) if (state.findings[i].id === id) return state.findings[i]; return null; }
+function ensureSelection() {
+  var vis = visibleFindings();
+  if (!vis.some(function (f) { return f.id === state.selectedId; })) state.selectedId = vis.length ? vis[0].id : null;
+}
+
+/* ================= rendering ================= */
+function renderAll() {
+  ensureSelection();
+  renderSummary(); renderFilters(); renderList(); renderContract(); renderDetail(); renderQc(); renderPeek();
+}
+function renderSummary() {
+  var s = summaryCounts(), total = s.total, nrev = 0;
+  state.findings.forEach(function (f) { if (state.reviewed.has(f.id) && !state.dismissed.has(f.id)) nrev++; });
+  var zero = state.findings.length === 0;
+  var strip = $('strip'); strip.replaceChildren();
+  SEV.forEach(function (sv) { strip.appendChild(el('span', { cls: 'badge sev-' + sv }, [icon(sv), el('span', { text: sv + ' ' + s[sv] })])); });
+  strip.appendChild(el('span', { cls: 'subline', text: nrev + ' of ' + total + ' reviewed' }));
+  $('tab-findings').textContent = 'Findings (' + total + ')';
+  if (zero) {
+    var n = state.result.summary.clauses, k = distinctCats();
+    var z = $('zeroMsg'); z.replaceChildren();
+    z.appendChild(el('h2', { text: 'No clauses matched our risk patterns.' }));
+    z.appendChild(el('p', { text: 'We scanned ' + n + ' clauses across ' + k + ' categories. That does not mean the contract is risk-free; a lawyer should still review it.' }));
+    z.appendChild(el('button', { cls: 'btn', text: 'Edit text', attrs: { type: 'button' }, on: { click: function () { $('btnEdit').click(); } } }));
+    $('sumCounts').textContent = '0 findings';
+    $('sumReviewed').textContent = ''; $('sumStart').replaceChildren();
+    return;
+  }
+  $('sumCounts').textContent = plural(total, 'finding') + ' · ' + s.High + ' High · ' + s.Medium + ' Medium · ' + s.Low + ' Low';
+  $('sumReviewed').textContent = nrev + ' of ' + total + ' reviewed';
+  var st = $('sumStart'); st.replaceChildren();
+  var open = openFindings();
+  if (open.length) {
+    var top = open[0];
+    st.appendChild(document.createTextNode('Start with #' + top.rank + ': '));
+    st.appendChild(el('button', { cls: 'tbtn', text: top.ctitle, attrs: { type: 'button' }, on: { click: function () { selectFinding(top.id, { scroll: true, fromList: true, openDetail: true }); } } }));
+  }
+}
+function distinctCats() { var s = {}; TAX.rules.forEach(function (r) { s[CAT_BY_RULE[r.id] || 'Other'] = 1; }); return Object.keys(s).length; }
+
+function renderFilters() {
+  var open = openFindings();
+  var sg = $('sevGroup'); sg.replaceChildren();
+  SEV.forEach(function (sv) {
+    var c = open.filter(function (f) { return f.severity === sv; }).length;
+    var b = el('button', { cls: 'btn sev-' + sv, attrs: { type: 'button', 'aria-pressed': state.fSev.has(sv) ? 'true' : 'false' }, on: { click: function () { toggleSet(state.fSev, sv); onFilterChange(); } } },
+      [el('span', { cls: 'sevmark', attrs: { style: 'color:var(--fg);display:inline-flex' } }, [icon(sv)]), el('span', { text: sv }), el('span', { cls: 'fcount', text: String(c) })]);
+    sg.appendChild(b);
+  });
+  var cg = $('catGroup'); cg.replaceChildren();
+  CATS.forEach(function (cat) {
+    var c = open.filter(function (f) { return f.dcat === cat; }).length;
+    if (!c) return;
+    cg.appendChild(el('button', { cls: 'btn', attrs: { type: 'button', 'aria-pressed': state.fCat.has(cat) ? 'true' : 'false' }, on: { click: function () { toggleSet(state.fCat, cat); onFilterChange(); } } },
+      [el('span', { text: cat }), el('span', { cls: 'fcount', text: String(c) })]));
+  });
+  var filtered = state.fSev.size || state.fCat.size, vis = visibleFindings().length;
+  $('showing').textContent = filtered ? 'Showing ' + vis + ' of ' + open.length : '';
+  $('btnClear').hidden = !filtered;
+}
+function toggleSet(s, v) { if (s.has(v)) s.delete(v); else s.add(v); }
+function onFilterChange() {
+  var before = state.selectedId;
+  ensureSelection();
+  renderFilters(); renderList(); renderContract(); renderDetail(); renderPeek();
+  var open = openFindings().length, vis = visibleFindings().length;
+  announce('Showing ' + vis + ' of ' + open);
+  if (state.selectedId && state.selectedId !== before) scrollToFinding(state.selectedId, false);
+}
+function clearFilters() { state.fSev.clear(); state.fCat.clear(); onFilterChange(); }
+$('btnClear').addEventListener('click', clearFilters);
+$('btnClear2').addEventListener('click', clearFilters);
+
+function rowEl(f, opts) {
+  opts = opts || {};
+  var rev = state.reviewed.has(f.id);
+  var r = el('li', { cls: 'row sev-' + f.severity + (rev ? ' done' : ''), attrs: { id: 'row-' + f.id, 'data-fid': f.id, role: 'option', 'aria-selected': f.id === state.selectedId ? 'true' : 'false', tabindex: '-1' } }, [
+    el('span', { cls: 'rank num', text: '#' + f.rank }),
+    el('span', { cls: 'badge sev-' + f.severity }, [icon(f.severity), el('span', { text: f.severity })]),
+    el('span', { cls: 'cat', text: f.dcat }),
+    el('span', { cls: 'score num', text: String(f.score) }),
+    el('span', { cls: 'ttl' }, [rev ? icon('check') : null, rev ? ' ' : null, document.createTextNode(f.ctitle), rev ? el('span', { cls: 'st', text: ' (Reviewed)' }) : null])
+  ]);
+  r.setAttribute('aria-label', 'Number ' + f.rank + ', ' + f.severity + ', ' + f.dcat + ', ' + f.ctitle + ', score ' + f.score + (rev ? ', reviewed' : ''));
+  return r;
+}
+function renderList() {
+  var list = $('list'); list.replaceChildren();
+  var vis = visibleFindings(), open = openFindings();
+  var any = state.findings.length > 0;
+  $('filterEmpty').hidden = !(any && vis.length === 0 && open.length > 0);
+  list.hidden = !any || vis.length === 0;
+  vis.forEach(function (f) { list.appendChild(rowEl(f)); });
+  var sel = list.querySelector('[aria-selected=true]');
+  var first = list.firstElementChild;
+  if (sel) sel.tabIndex = 0; else if (first) first.tabIndex = 0;
+  // dismissed
+  var dBox = $('dismissedBox'), dl = $('dismissedList'); dl.replaceChildren();
+  var dis = state.findings.filter(function (f) { return state.dismissed.has(f.id); });
+  dBox.hidden = dis.length === 0;
+  $('dismissedSum').textContent = 'Dismissed (' + dis.length + ')';
+  dis.forEach(function (f) {
+    var li = rowEl(f); li.removeAttribute('role'); li.removeAttribute('aria-selected'); li.removeAttribute('tabindex'); li.removeAttribute('id');
+    li.appendChild(el('button', { cls: 'btn restore', text: 'Restore', attrs: { type: 'button', 'aria-label': 'Restore finding ' + f.rank + ': ' + f.ctitle }, on: { click: function () { restoreFinding(f.id); } } }));
+    dl.appendChild(li);
+  });
+}
+$('list').addEventListener('click', function (e) {
+  var r = e.target.closest('[data-fid]'); if (!r) return;
+  selectFinding(r.dataset.fid, { scroll: true, fromList: true, openDetail: true });
+});
+$('list').addEventListener('keydown', function (e) {
+  var r = e.target.closest('[data-fid]'); if (!r) return;
+  var rows = Array.prototype.slice.call($('list').children), i = rows.indexOf(r), t = null;
+  if (e.key === 'ArrowDown') t = rows[Math.min(rows.length - 1, i + 1)];
+  else if (e.key === 'ArrowUp') t = rows[Math.max(0, i - 1)];
+  else if (e.key === 'Home') t = rows[0];
+  else if (e.key === 'End') t = rows[rows.length - 1];
+  else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFinding(r.dataset.fid, { scroll: true, fromList: true, openDetail: true }); return; }
+  if (t) { e.preventDefault(); rows.forEach(function (x) { x.tabIndex = -1; }); t.tabIndex = 0; t.focus(); }
+});
+
+/* ---- QC ---- */
+function renderQc() {
+  var qc = state.result ? state.result.qc : [];
+  var box = $('qcBox'), list = $('qcList'); list.replaceChildren();
+  box.hidden = !qc.length;
+  $('qcSum').textContent = 'Not found in this contract (' + qc.length + ')';
+  qc.forEach(function (q) {
+    list.appendChild(el('div', { cls: 'qc-item' }, [el('b', { text: q.title + '. ' }), document.createTextNode(q.message), el('span', { cls: 'subline', text: ' Check priority: ' + q.severity + '.' })]));
+  });
+}
+
+/* ---- contract rendering with highlights (DOM nodes + textContent only) ---- */
+function sevIdx(s) { return SEV.indexOf(s); }
+function placeHighlights(list) {
+  var prio = list.slice().sort(function (a, b) { return sevIdx(a.severity) - sevIdx(b.severity) || b.score - a.score || a.rank - b.rank; });
+  var placed = [];
+  prio.forEach(function (f) {
+    var free = [{ s: f.quote.start, e: f.quote.end }];
+    placed.forEach(function (p) {
+      var nf = [];
+      free.forEach(function (r) {
+        if (r.e <= p.s || r.s >= p.e) { nf.push(r); return; }
+        if (r.s < p.s) nf.push({ s: r.s, e: p.s });
+        if (r.e > p.e) nf.push({ s: p.e, e: r.e });
+      });
+      free = nf;
+    });
+    free.sort(function (a, b) { return (b.e - b.s) - (a.e - a.s); });
+    if (free[0] && free[0].e - free[0].s >= 12) placed.push({ f: f, s: free[0].s, e: free[0].e });
+  });
+  return placed.sort(function (a, b) { return a.s - b.s; });
+}
+function markEl(f, reviewed, print) {
+  var kids = [reviewed ? icon('check') : icon(f.severity)];
+  if (print) kids.unshift(el('span', { cls: 'lbl', text: f.severity.charAt(0) }));
+  kids.push(document.createTextNode(String(f.rank)));
+  return el('span', { cls: 'hl-mark num', attrs: { 'aria-hidden': 'true' } }, kids);
+}
+function hlName(f) { return f.severity + ', ' + f.dcat + ', finding ' + f.rank + ': ' + trunc(f.quote.text, 60); }
+function buildContract(container, text, list, mode, nodeMap) {
+  container.replaceChildren();
+  var placed = placeHighlights(list), pos = 0;
+  function plain(s, e) {
+    if (e <= s) return;
+    var tn = document.createTextNode(text.slice(s, e));
+    container.appendChild(tn);
+    if (nodeMap) nodeMap.push({ node: tn, start: s, end: e });
+  }
+  placed.forEach(function (p) {
+    plain(pos, p.s);
+    var f = p.f, rev = state.reviewed.has(f.id);
+    var tn = document.createTextNode(text.slice(p.s, p.e));
+    var h;
+    if (mode === 'print') {
+      h = el('span', { cls: 'hl-p sev-' + f.severity + (rev ? ' reviewed' : '') }, [tn, markEl(f, rev, true)]);
+    } else {
+      h = el('span', { cls: 'hl sev-' + f.severity + (rev ? ' reviewed' : ''), attrs: { role: 'button', tabindex: '0', 'data-fid': f.id, 'aria-label': hlName(f), 'aria-current': f.id === state.selectedId ? 'true' : 'false' } }, [tn, markEl(f, rev, false)]);
+      if (nodeMap) nodeMap.push({ node: tn, start: p.s, end: p.e });
+    }
+    container.appendChild(h);
+    pos = p.e;
+  });
+  plain(pos, text.length);
+}
+function renderPlainContract() {
+  var c = $('contractText'); c.replaceChildren(document.createTextNode(state.text));
+  renderFoot();
+}
+function renderFoot() {
+  var f = $('contractFoot'); f.replaceChildren();
+  var parts = [fmtNum(words(state.text)) + ' words'];
+  f.appendChild(document.createTextNode(parts.join(' · ')));
+  if (state.docxNote) f.appendChild(el('div', { text: "Converted from .docx. Formatting, comments and tracked changes aren't shown." }));
+  if (state.text.indexOf('SAMPLE ONLY - FICTIONAL CONTRACT') === 0) f.appendChild(el('div', { text: 'Sample, fictional.' }));
+}
+function renderContract() {
+  state.nodeMap = [];
+  buildContract($('contractText'), state.text, visibleFindings(), 'screen', state.nodeMap);
+  renderFoot();
+}
+$('contractText').addEventListener('click', function (e) {
+  var b = e.target.closest('.hl'); if (!b) return;
+  selectFinding(b.dataset.fid, { scroll: false, fromHighlight: true, scrollList: true });
+});
+
+$('contractText').addEventListener('keydown', function (e) {
+  var b = e.target.closest && e.target.closest('.hl');
+  if (b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); b.click(); }
+});
+
+/* ---- selection ---- */
+function selectFinding(id, o) {
+  o = o || {};
+  var f = findingById(id); if (!f) return;
+  state.selectedId = id;
+  if (o.fromHighlight) state.peekOpen = true;
+  if (o.fromList) state.peekOpen = false;
+  document.querySelectorAll('#contractText .hl').forEach(function (b) { b.setAttribute('aria-current', b.dataset.fid === id ? 'true' : 'false'); });
+  var rows = $('list').children, selRow = null;
+  Array.prototype.forEach.call(rows, function (r) {
+    var on = r.dataset.fid === id;
+    r.setAttribute('aria-selected', on ? 'true' : 'false'); r.tabIndex = on ? 0 : -1;
+    if (on) selRow = r;
+  });
+  renderDetail();
+  renderPeek(o.fromHighlight);
+  if (o.scrollList && selRow) selRow.scrollIntoView({ block: 'nearest', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+  if (o.scroll) scrollToFinding(id, false);
+  if (isMobile() && o.fromList && o.openDetail) openMobileDetail();
+}
+function scrollerRect() { return isMobile() ? null : $('contractSection'); }
+function scrollToRect(rect) {
+  var sc = scrollerRect(), smooth = reduceMotion.matches ? 'auto' : 'smooth';
+  if (sc) { var cr = sc.getBoundingClientRect(); sc.scrollTo({ top: sc.scrollTop + rect.top - cr.top - cr.height / 2 + rect.height / 2, behavior: smooth }); }
+  else window.scrollTo({ top: window.scrollY + rect.top - window.innerHeight / 2 + rect.height / 2, behavior: smooth });
+}
+function rangeFor(start, end) {
+  var m = state.nodeMap, a = null, b = null;
+  for (var i = 0; i < m.length; i++) {
+    var x = m[i];
+    if (!a && start >= x.start && start <= x.end) a = { n: x.node, o: start - x.start };
+    if (end >= x.start && end <= x.end) b = { n: x.node, o: end - x.start };
+    if (a && b && end <= x.end) break;
+  }
+  if (!a) return null;
+  var r = document.createRange();
+  try { r.setStart(a.n, Math.min(a.o, a.n.length)); if (b) r.setEnd(b.n, Math.min(b.o, b.n.length)); else r.setEnd(a.n, a.n.length); } catch (e) { return null; }
+  return r;
+}
+function flash(range) {
+  try { if (window.CSS && CSS.highlights && window.Highlight) { CSS.highlights.set('rfd-jump', new Highlight(range)); setTimeout(function () { CSS.highlights.delete('rfd-jump'); }, 2000); } } catch (e) {}
+}
+function jumpRange(start, end) {
+  if (isMobile()) setTab('contract', false);
+  requestAnimationFrame(function () {
+    var r = rangeFor(start, end);
+    if (!r) return;
+    scrollToRect(r.getBoundingClientRect()); flash(r);
+  });
+}
+function scrollToFinding(id, quiet) {
+  var f = findingById(id); if (!f) return;
+  var b = document.querySelector('#contractText .hl[data-fid="' + id + '"]');
+  if (b) scrollToRect(b.getBoundingClientRect());
+  else jumpRange(f.quote.start, f.quote.end);
+}
+
+/* ---- detail ---- */
+function renderDetail() {
+  var z = $('detailZone'); z.replaceChildren();
+  var f = state.selectedId ? findingById(state.selectedId) : null;
+  var wrap = el('div', { cls: 'detail' });
+  if (!f) {
+    wrap.appendChild(backRow());
+    wrap.appendChild(el('p', { cls: 'lead', text: 'Select a finding to see why it matters.' }));
+    z.appendChild(wrap); return;
+  }
+  var cls = 'sev-' + f.severity, rev = state.reviewed.has(f.id), total = openFindings().length;
+  wrap.className = 'detail ' + cls;
+  wrap.appendChild(backRow());
+  var head = el('div', { cls: 'd-head' }, [
+    el('span', { cls: 'num', text: '#' + f.rank + ' of ' + state.findings.length }),
+    badge(f.severity), el('span', { cls: 'chip', text: f.dcat }),
+    el('span', { cls: 'sc', text: f.score + '/100' })]);
+  wrap.appendChild(head);
+  if (f.mitigation < 0) wrap.appendChild(el('p', { cls: 'd-sub num', text: 'Base ' + f.baseScore + ', mitigations ' + f.mitigation }));
+  var h3 = el('h3', { text: f.ctitle, attrs: { id: 'detailTitle', tabindex: '-1' } });
+  wrap.appendChild(h3);
+  if (f.heading) wrap.appendChild(el('p', { cls: 'flag', text: 'Flagged as: ' + f.title }));
+  // matched text
+  wrap.appendChild(el('h4', { text: 'Matched text' }));
+  wrap.appendChild(el('blockquote', { cls: 'quote', text: f.quote.text }));
+  var qa = el('div', { cls: 'qacts' }, [
+    el('button', { cls: 'tbtn show-btn-d', text: 'Jump to clause', attrs: { type: 'button' }, on: { click: function () { scrollToFinding(f.id, false); if (isMobile()) { setTab('contract', false); setTimeout(function () { scrollToFinding(f.id, false); }, 60); } } } })]);
+  if (f.locator) qa.appendChild(el('span', { text: f.locator }));
+  wrap.appendChild(qa);
+  wrap.appendChild(el('h4', { text: 'Why it matters' }));
+  wrap.appendChild(el('p', { text: f.why }));
+  if (f.aggravatorsFound.length) {
+    var ul = el('ul', { cls: 'fine' }); f.aggravatorsFound.forEach(function (a) { ul.appendChild(el('li', { text: a.reason + ' (+' + a.delta + ')' })); });
+    wrap.appendChild(el('p', { cls: 'label-s', text: 'Raised this score' })); wrap.appendChild(ul);
+  }
+  wrap.appendChild(el('h4', { text: 'Suggested fix' }));
+  wrap.appendChild(el('p', { cls: 'label-s', text: 'Suggested starting point' }));
+  wrap.appendChild(el('p', { text: f.fix }));
+  wrap.appendChild(el('h4', { text: 'Jurisdiction note' }));
+  var gl = state.result.governingLaw;
+  wrap.appendChild(el('p', { text: 'General information, verify locally. ' + (gl ? 'Contract states: ' + gl + '.' : 'No governing-law clause found.') + (f.jurisdictionNote ? ' ' + f.jurisdictionNote : '') }));
+  wrap.appendChild(el('h4', { text: 'Mitigating factors found' }));
+  if (!f.mitigatorsFound.length) wrap.appendChild(el('p', { text: 'None found in this contract.' }));
+  else {
+    var ml = el('ul');
+    f.mitigatorsFound.forEach(function (m) {
+      ml.appendChild(el('li', {}, [el('span', { cls: 'mitq', text: '“' + trunc(m.text, 90) + '”' }), ' ',
+        el('button', { cls: 'tbtn', text: 'Jump', attrs: { type: 'button', 'aria-label': 'Jump to mitigating text: ' + trunc(m.text, 40) }, on: { click: function () { jumpRange(m.start, m.end); } } })]));
+    });
+    wrap.appendChild(ml);
+  }
+  if (f.alsoMatches && f.alsoMatches.length) {
+    wrap.appendChild(el('p', { cls: 'fine', text: 'This clause also matched: ' + f.alsoMatches.map(ruleTitle).join('; ') + '.' }));
+  }
+  var foot = el('div', { cls: 'sticky-foot' }, [
+    el('button', { cls: 'btn', text: rev ? 'Reviewed' : 'Mark reviewed', attrs: { type: 'button', 'aria-pressed': rev ? 'true' : 'false', id: 'btnReview' }, on: { click: function () { toggleReviewed(f.id); } } }),
+    el('button', { cls: 'btn', text: 'Dismiss', attrs: { type: 'button', id: 'btnDismiss' }, on: { click: function () { dismissFinding(f.id); } } }),
+    el('button', { cls: 'btn show-btn', text: 'Show in contract', attrs: { type: 'button' }, on: { click: function () { showInContract(f.id); } } }),
+    el('span', { cls: 'status', text: 'Status: ' + (rev ? 'Reviewed' : 'Open') })
+  ]);
+  wrap.appendChild(foot);
+  z.appendChild(wrap);
+  if (isMobile() && state.mobileDetail && z.dataset.focusNext === '1') { z.dataset.focusNext = ''; h3.focus({ preventScroll: true }); }
+}
+function ruleTitle(id) { for (var i = 0; i < TAX.rules.length; i++) if (TAX.rules[i].id === id) return TAX.rules[i].title; return id; }
+function backRow() {
+  var b = el('button', { cls: 'btn back-btn', text: '< All findings', attrs: { type: 'button' }, on: { click: closeMobileDetail } });
+  return el('div', { attrs: { style: 'margin-bottom:8px' } }, [b]);
+}
+
+/* ---- review / dismiss ---- */
+function toggleReviewed(id) {
+  if (state.reviewed.has(id)) state.reviewed.delete(id); else state.reviewed.add(id);
+  renderSummary(); renderList(); renderContract(); renderDetail(); renderPeek();
+  var btn = $('btnReview'); if (btn) btn.focus();
+  announce(state.reviewed.has(id) ? 'Marked reviewed.' : 'Review mark removed.');
+}
+function dismissFinding(id) {
+  var vis = visibleFindings(), i = vis.findIndex(function (f) { return f.id === id; });
+  var next = vis[i + 1] || vis[i - 1] || null;
+  state.dismissed.add(id);
+  var wasSelected = state.selectedId === id;
+  if (wasSelected) state.selectedId = next ? next.id : null;
+  ensureSelection();
+  renderSummary(); renderFilters(); renderList(); renderContract(); renderDetail(); renderQc(); renderPeek();
+  if (isMobile() && state.mobileDetail && !state.selectedId) closeMobileDetail();
+  var row = state.selectedId && $('row-' + state.selectedId);
+  if (row && !isMobile()) { row.focus(); }
+  else if (!row && !isMobile()) { $('resultsHead').focus(); }
+  toast('Dismissed.', 'Undo', function () { restoreFinding(id, true); });
+  announce('Dismissed. Undo available for 6 seconds.');
+}
+function restoreFinding(id, fromUndo) {
+  state.dismissed.delete(id);
+  renderSummary(); renderFilters(); renderList(); renderContract(); renderDetail(); renderPeek();
+  announce('Finding restored.');
+  var row = $('row-' + id); if (row && !isMobile()) row.focus();
+}
+
+/* ---- mobile ---- */
+function setTab(name, quiet) {
+  document.body.dataset.tab = name;
+  ['contract', 'findings'].forEach(function (t) {
+    var b = $('tab-' + t); b.setAttribute('aria-selected', t === name ? 'true' : 'false'); b.tabIndex = t === name ? 0 : -1;
+  });
+  if (name === 'contract') { state.mobileDetail = false; document.body.dataset.mdetail = '0'; }
+  renderPeek();
+}
+$('tabs').addEventListener('click', function (e) { var b = e.target.closest('[role=tab]'); if (b) setTab(b.id.replace('tab-', ''), false); });
+$('tabs').addEventListener('keydown', function (e) {
+  var order = ['contract', 'findings'], cur = document.body.dataset.tab, i = order.indexOf(cur);
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') {
+    e.preventDefault();
+    var n = e.key === 'Home' ? 0 : e.key === 'End' ? 1 : (i + (e.key === 'ArrowRight' ? 1 : 1)) % 2;
+    setTab(order[n]); $('tab-' + order[n]).focus();
+  }
+});
+function openMobileDetail() {
+  setTab('findings', true);
+  state.mobileDetail = true; document.body.dataset.mdetail = '1';
+  $('detailZone').dataset.focusNext = '1';
+  renderDetail();
+  var h = $('detailTitle'); if (h) h.focus({ preventScroll: true });
+  window.scrollTo(0, 0);
+}
+function closeMobileDetail() {
+  var id = state.selectedId;
+  state.mobileDetail = false; document.body.dataset.mdetail = '0';
+  var row = id && $('row-' + id);
+  if (row) { row.focus(); row.scrollIntoView({ block: 'nearest' }); }
+}
+function showInContract(id) {
+  setTab('contract', false);
+  requestAnimationFrame(function () { scrollToFinding(id, false); var b = document.querySelector('#contractText .hl[data-fid="' + id + '"]'); if (b) b.focus({ preventScroll: true }); });
+}
+function renderPeek() {
+  var p = $('peek'); p.replaceChildren();
+  var f = state.selectedId ? findingById(state.selectedId) : null;
+  var show = isMobile() && state.peekOpen && f && document.body.dataset.tab === 'contract' && (state.mode === 'results');
+  p.classList.toggle('on', !!show);
+  if (!show) return;
+  p.className = 'peek on sev-' + f.severity;
+  p.appendChild(badge(f.severity));
+  p.appendChild(el('div', { cls: 'ptxt' }, [el('div', { cls: 'pcat', text: f.dcat }), el('div', { cls: 'ptit', text: f.ctitle })]));
+  p.appendChild(el('button', { cls: 'btn primary', text: 'Details', attrs: { type: 'button' }, on: { click: function () { openMobileDetail(); } } }));
+}
+var sheetOpener = null;
+$('btnFilter').addEventListener('click', function () { sheetOpener = this; $('filtersZone').classList.add('sheet'); $('sheetBackdrop').classList.add('on'); $('filtersZone').setAttribute('role', 'dialog'); $('filtersZone').setAttribute('aria-label', 'Filter findings'); $('filtersZone').setAttribute('aria-modal', 'true'); var f = $('filtersZone').querySelector('button:not(.sheet-close)'); (f || $('btnSheetClose')).focus(); });
+function closeSheet() {
+  $('filtersZone').classList.remove('sheet'); $('sheetBackdrop').classList.remove('on');
+  $('filtersZone').removeAttribute('role'); $('filtersZone').removeAttribute('aria-label'); $('filtersZone').removeAttribute('aria-modal');
+  if (sheetOpener) { sheetOpener.focus(); sheetOpener = null; }
+}
+$('btnSheetClose').addEventListener('click', closeSheet);
+$('sheetBackdrop').addEventListener('click', closeSheet);
+function applyLayout() {
+  var m = isMobile(), c = $('contractSection'), a = $('findingsAside');
+  if (m) {
+    c.setAttribute('role', 'tabpanel'); c.setAttribute('aria-labelledby', 'tab-contract');
+    a.setAttribute('role', 'tabpanel'); a.setAttribute('aria-labelledby', 'tab-findings');
+  } else {
+    c.removeAttribute('role'); c.removeAttribute('aria-labelledby'); a.removeAttribute('role'); a.removeAttribute('aria-labelledby');
+    closeSheet(); state.mobileDetail = false; document.body.dataset.mdetail = '0';
+  }
+  if (state.result) renderPeek();
+}
+if (mqMobile.addEventListener) mqMobile.addEventListener('change', applyLayout); else mqMobile.addListener(applyLayout);
+
+/* ================= export ================= */
+var menu = $('exportMenu'), btnExport = $('btnExport');
+function openMenu() { menu.hidden = false; btnExport.setAttribute('aria-expanded', 'true'); $('miPrint').focus(); }
+function closeMenu() { if (menu.hidden) return; menu.hidden = true; btnExport.setAttribute('aria-expanded', 'false'); }
+btnExport.addEventListener('click', function () { menu.hidden ? openMenu() : closeMenu(); });
+menu.addEventListener('keydown', function (e) {
+  var items = [$('miPrint'), $('miCopy')], i = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % 2].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i + 1) % 2].focus(); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeMenu(); btnExport.focus(); }
+  else if (e.key === 'Tab') closeMenu();
+});
+document.addEventListener('click', function (e) { if (!e.target.closest('.menu-wrap')) closeMenu(); });
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    if ($('filtersZone').classList.contains('sheet')) closeSheet();
+    else if (!menu.hidden) { closeMenu(); btnExport.focus(); }
+  }
+});
+$('miPrint').addEventListener('click', function () { closeMenu(); buildPrint(); window.print(); });
+window.addEventListener('beforeprint', buildPrint);
+$('miCopy').addEventListener('click', function () { closeMenu(); copyMarkdown(); });
+
+function today() { return new Date().toISOString().slice(0, 10); }
+function mdEsc(s) { return String(s).replace(/[\\`*_{}\[\]()#+!|<>~]/g, '\\$&').replace(/^(\s*)-/gm, '$1\\-'); }
+function mdQuote(s) { return '> ' + mdEsc(s).replace(/\s*\n\s*/g, '\n> '); }
+function groupsLabel() {
+  var g = (state.result && state.result.groups) || state.groups || ['core', 'extra'];
+  var names = { core: 'core contract risks', extra: 'additional contract risks', engagement: 'engagement-letter terms' };
+  return g.map(function (x) { return names[x] || x; }).join(', ');
+}
+function buildMarkdown() {
+  var open = openFindings(), s = summaryCounts(), nrev = open.filter(function (f) { return state.reviewed.has(f.id); }).length;
+  var L = [];
+  L.push('# Red Flag & Risk Detector report', '', 'Date: ' + today(), '', '> ' + DISCLAIMER, '> Assumes you are the customer or client.', '');
+  L.push('Rule groups checked: ' + groupsLabel() + '.', '');
+  L.push('## Summary', '', plural(s.total, 'finding') + ': ' + s.High + ' High, ' + s.Medium + ' Medium, ' + s.Low + ' Low. ' + nrev + ' of ' + s.total + ' reviewed.', '');
+  if (!open.length) L.push('No clauses matched our risk patterns. That does not mean the contract is risk-free; a lawyer should still review it.', '');
+  var gl = state.result.governingLaw;
+  open.forEach(function (f) {
+    var rev = state.reviewed.has(f.id);
+    L.push('### ' + f.rank + '. [' + f.severity.toUpperCase() + '] ' + f.dcat + ': ' + mdEsc(f.ctitle), '');
+    L.push('Score: ' + f.score + '/100' + (f.mitigation < 0 ? ' (Base ' + f.baseScore + ', mitigations ' + f.mitigation + ')' : '') + (f.locator ? ' | ' + mdEsc(f.locator) : ''), '');
+    L.push(mdQuote(f.quote.text), '');
+    L.push('**Why it matters:** ' + f.why, '');
+    L.push('**Suggested starting point:** ' + f.fix, '');
+    L.push('**Jurisdiction:** General information, verify locally. ' + (gl ? 'Contract states: ' + mdEsc(gl) + '.' : 'No governing-law clause found.') + (f.jurisdictionNote ? ' ' + f.jurisdictionNote : ''), '');
+    if (f.mitigatorsFound.length) { L.push('**Mitigating factors found:**'); f.mitigatorsFound.forEach(function (m) { L.push('- "' + mdEsc(trunc(m.text, 120)) + '"'); }); L.push(''); }
+    else L.push('**Mitigating factors found:** None found in this contract.', '');
+    L.push('**Status:** ' + (rev ? 'Reviewed' : 'Open'), '');
+  });
+  var qc = state.result.qc;
+  if (qc.length) { L.push('## Not found in this contract', ''); qc.forEach(function (q) { L.push('- ' + q.title + '. ' + q.message); }); L.push(''); }
+  L.push('---', 'Generated by Red Flag & Risk Detector on ' + today() + '. For lawyer review, not legal advice.');
+  return L.join('\n');
+}
+async function copyMarkdown() {
+  var md = buildMarkdown(), ok = false;
+  try { await navigator.clipboard.writeText(md); ok = true; } catch (e) { ok = false; }
+  if (ok) { announce('Report copied as Markdown.'); toast('Report copied as Markdown.'); return; }
+  var d = $('mdDlg'), ta = $('mdText'); ta.value = md;
+  $('mdClose').onclick = function () { d.close(); btnExport.focus(); };
+  d.showModal(); ta.focus(); ta.select();
+}
+function buildPrint() {
+  var root = $('printReport'); root.replaceChildren();
+  if (!state.result) return;
+  var open = openFindings(), s = summaryCounts(), gl = state.result.governingLaw;
+  root.appendChild(el('div', { cls: 'pr-disc', text: DISCLAIMER + ' Assumes you are the customer or client.' }));
+  root.appendChild(el('h1', { text: 'Red Flag & Risk Detector report' }));
+  root.appendChild(el('p', { text: 'Rule groups checked: ' + groupsLabel() + '.' }));
+  root.appendChild(el('p', { text: today() + ' · ' + plural(s.total, 'finding') + ': ' + s.High + ' High, ' + s.Medium + ' Medium, ' + s.Low + ' Low.' }));
+  if (!open.length) root.appendChild(el('p', { text: 'No clauses matched our risk patterns. That does not mean the contract is risk-free; a lawyer should still review it.' }));
+  open.forEach(function (f) {
+    var rev = state.reviewed.has(f.id), box = el('div', { cls: 'pr-find sev-' + f.severity });
+    box.appendChild(el('div', {}, [badge(f.severity), ' ', el('span', { cls: 'chip', text: '#' + f.rank + ' ' + f.dcat }), ' ', el('span', { cls: 'num', text: f.score + '/100' + (f.mitigation < 0 ? ' (Base ' + f.baseScore + ', mitigations ' + f.mitigation + ')' : '') })]));
+    box.appendChild(el('h3', { text: f.ctitle }));
+    box.appendChild(el('blockquote', { text: f.quote.text }));
+    box.appendChild(el('p', {}, [el('b', { text: 'Why it matters: ' }), f.why]));
+    box.appendChild(el('p', {}, [el('b', { text: 'Suggested starting point: ' }), f.fix]));
+    box.appendChild(el('p', {}, [el('b', { text: 'Jurisdiction: ' }), 'General information, verify locally. ' + (gl ? 'Contract states: ' + gl + '.' : 'No governing-law clause found.') + (f.jurisdictionNote ? ' ' + f.jurisdictionNote : '')]));
+    var mt = f.mitigatorsFound.length ? f.mitigatorsFound.map(function (m) { return '“' + trunc(m.text, 90) + '”'; }).join('; ') : 'None found in this contract.';
+    box.appendChild(el('p', {}, [el('b', { text: 'Mitigating factors found: ' }), mt]));
+    box.appendChild(el('p', {}, [el('b', { text: 'Status: ' }), rev ? 'Reviewed' : 'Open']));
+    root.appendChild(box);
+  });
+  if (state.result.qc.length) {
+    root.appendChild(el('h2', { text: 'Not found in this contract' }));
+    var ul = el('ul'); state.result.qc.forEach(function (q) { ul.appendChild(el('li', { text: q.title + '. ' + q.message })); }); root.appendChild(ul);
+  }
+  root.appendChild(el('h2', { text: 'Contract text with highlights' }));
+  var c = el('div', { cls: 'contract' }); buildContract(c, state.text, open, 'print', null); root.appendChild(c);
+  root.appendChild(el('p', { cls: 'fine', text: 'Generated by Red Flag & Risk Detector on ' + today() + '. For lawyer review, not legal advice.' }));
+}
+
+/* ================= init ================= */
+$('skipContract').addEventListener('click', function (e) { e.preventDefault(); if (isMobile()) setTab('contract'); var t = state.mode === 'input' ? src : $('contractSection'); t.focus(); });
+$('skipFindings').addEventListener('click', function (e) {
+  e.preventDefault();
+  if (state.mode === 'input') { src.focus(); return; }
+  if (isMobile()) setTab('findings');
+  var l = $('list').querySelector('[tabindex="0"]') || $('findingsAside'); if (l.focus) l.focus();
+});
+applyLayout();
+setMode('input');
+updateInputMeta();
+
+})();
+</script>
+</body>
+</html>

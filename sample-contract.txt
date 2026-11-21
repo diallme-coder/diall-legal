@@ -1,0 +1,65 @@
+SAMPLE ONLY - FICTIONAL CONTRACT. This text was written to demonstrate the tool. Brightwave Cloud Ltd. and Harbor & Pine Studio LLC are invented, and this is not a real agreement or a recommended template.
+
+SOFTWARE-AS-A-SERVICE AGREEMENT
+
+This Software-as-a-Service Agreement (the "Agreement") is made as of January 1, 2027 (the "Effective Date") between Brightwave Cloud Ltd. ("Provider") and Harbor & Pine Studio LLC ("Customer").
+
+1. Services
+
+1.1 Provider will make its hosted project-management platform (the "Service") available to Customer during the Term. The scope of services is limited to the Service features described in Exhibit A, plus standard email support on business days. Provider will use commercially reasonable efforts to keep the Service available 99.5% of each month.
+
+1.2 Customer may permit up to 25 employees to use the Service and is responsible for keeping its login credentials secure.
+
+2. Term and Renewal
+
+2.1 This Agreement begins on the Effective Date and has an initial term of twelve (12) months. The Agreement automatically renews for successive twelve-month periods unless Customer gives Provider at least 90 days prior written notice of non-renewal. Each renewal term will be charged at the fees then in effect.
+
+3. Fees and Payment
+
+3.1 Customer will pay the annual subscription fee shown in Exhibit A, invoiced annually in advance and due within thirty days of the invoice date.
+
+3.2 Overdue amounts accrue interest at 1.5% per month until paid in full.
+
+3.3 Provider reserves the right to change the fees, and any other terms of this Agreement, at its sole discretion and without prior notice by posting the revised terms on its website. Customer's continued use of the Service constitutes acceptance of the revised terms.
+
+4. Confidentiality
+
+4.1 Each party will keep the other party's non-public business information confidential and use it only to perform this Agreement. These confidentiality obligations shall survive for three (3) years after the Agreement ends. They do not apply to information that is publicly available or independently developed.
+
+5. Data
+
+5.1 Provider will process Customer Data solely to provide the Service and will not sell Customer Data to anyone. Provider maintains commercially reasonable security safeguards.
+
+5.2 Provider may use aggregated, de-identified data derived from the Service for any purpose, including to train machine learning models.
+
+6. Intellectual Property
+
+6.1 Provider owns the Service and all improvements to it. Customer owns its content. Customer hereby assigns to Provider all right, title and interest in any suggestions or feedback Customer provides about the Service.
+
+7. Limitation of Liability
+
+7.1 In no event shall either party be liable for indirect, incidental or consequential damages. Except for fraud, gross negligence or willful misconduct, each party's aggregate liability under this Agreement shall not exceed the fees paid in the twelve months before the claim arose.
+
+8. Indemnification
+
+8.1 Customer shall indemnify, defend and hold harmless Provider from any and all claims, losses, liabilities and expenses arising out of or relating to Customer's use of the Service, including claims caused by Provider's own negligence, without limit.
+
+9. Termination
+
+9.1 Provider may terminate this Agreement for convenience at any time by written notice to Customer, and will give a pro rata refund of any prepaid fees. Customer may terminate only for Provider's material breach that remains uncured after written notice.
+
+10. Restrictive Covenants
+
+10.1 During the Term and for two (2) years afterward, Customer shall not, directly or indirectly, compete with Provider or solicit Provider's customers or employees anywhere in the world.
+
+11. Disputes and Governing Law
+
+11.1 Any dispute arising from this Agreement shall be resolved by binding arbitration. The arbitration will be confidential. Customer waives any right to a jury trial and to participate in a class action against Provider.
+
+11.2 This Agreement is governed by the laws of the State of Delaware. The courts of Delaware have non-exclusive jurisdiction over any matter not subject to arbitration.
+
+12. General
+
+12.1 Notices must be sent by email to the addresses on the signature page and will be treated as received on the next business day.
+
+12.2 This Agreement, with Exhibit A, is the entire agreement between the parties and may be signed in counterparts.

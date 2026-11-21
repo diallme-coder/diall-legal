@@ -1,0 +1,913 @@
+{
+  "version": "1.0",
+  "disclaimer": "Automated analysis draft for attorney review only. This is not legal advice, does not create an attorney-client relationship, and does not predict how any court, arbitrator or agency will rule. Pattern matching can miss or mis-flag clauses. Enforceability of many provisions is jurisdiction-dependent; items marked 'verify for jurisdiction' require review under applicable law by a licensed attorney.",
+  "severity_rubric": {
+    "High": {
+      "definition": "Clause may create significant, open-ended or hard-to-exit financial or legal exposure, or waive important rights. Prioritize for attorney review before signing.",
+      "score_range": [
+        70,
+        100
+      ]
+    },
+    "Medium": {
+      "definition": "Clause shifts meaningful risk or cost to one party or limits options, but is bounded or commonly negotiated. Review and consider negotiating.",
+      "score_range": [
+        40,
+        69
+      ]
+    },
+    "Low": {
+      "definition": "Clause is common or limited in effect but worth noting for awareness or clarification.",
+      "score_range": [
+        1,
+        39
+      ]
+    }
+  },
+  "scoring": {
+    "base": "each rule has base_score; modifiers add or subtract points",
+    "method": "score = base_score + sum(aggravator deltas matched in the clause) + mitigator_delta (once, if any mitigator matches) + sum(global modifier deltas matched in the clause); clamp to 1-100; map to severity_rubric. Scores rank review priority only and are not predictions of enforceability or outcome.",
+    "modifiers": [
+      {
+        "id": "sole-discretion",
+        "pattern": "(sole|absolute|unfettered)\\s+discretion",
+        "delta": 8,
+        "reason": "Decision power rests entirely with one party"
+      },
+      {
+        "id": "without-notice",
+        "pattern": "without\\s+(prior\\s+)?(notice|consent)",
+        "delta": 8,
+        "reason": "No notice or consent required"
+      },
+      {
+        "id": "irrevocable-perpetual",
+        "pattern": "\\b(irrevocabl[ey]|perpetual|in\\s+perpetuity)\\b",
+        "delta": 5,
+        "reason": "Obligation cannot be ended"
+      },
+      {
+        "id": "notwithstanding",
+        "pattern": "notwithstanding\\s+anything",
+        "delta": 5,
+        "reason": "Overrides other protective clauses"
+      },
+      {
+        "id": "any-and-all",
+        "pattern": "any\\s+and\\s+all",
+        "delta": 3,
+        "reason": "Very broad scope language"
+      },
+      {
+        "id": "mutual",
+        "pattern": "\\b(mutual(ly)?|each\\s+party|either\\s+party|neither\\s+party)\\b",
+        "delta": -8,
+        "reason": "Obligation runs both ways"
+      },
+      {
+        "id": "reasonable",
+        "pattern": "\\b(commercially\\s+)?reasonabl[ey]\\b",
+        "delta": -4,
+        "reason": "Reasonableness standard limits discretion"
+      },
+      {
+        "id": "written-signed",
+        "pattern": "in\\s+writing\\s+(and\\s+)?signed\\s+by\\s+(both|each|all)",
+        "delta": -8,
+        "reason": "Changes require signed writing by both sides"
+      },
+      {
+        "id": "notice-period",
+        "pattern": "\\b(30|thirty|60|sixty|90|ninety)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice",
+        "delta": -5,
+        "reason": "Defined advance notice period"
+      },
+      {
+        "id": "cap",
+        "pattern": "\\b(capped|not\\s+to\\s+exceed|shall\\s+not\\s+exceed)\\b",
+        "delta": -4,
+        "reason": "Exposure is capped"
+      }
+    ]
+  },
+  "rules": [
+    {
+      "id": "auto-renewal-trap",
+      "category": "Auto-renewal",
+      "title": "Automatic renewal without clear opt-out",
+      "group": "core",
+      "base_score": 72,
+      "why_it_matters": "The contract renews itself unless you cancel in a narrow window, which can lock you into another full term and payments.",
+      "triggers": [
+        "automatic(ally)?\\s+renew",
+        "auto[- ]?renew",
+        "renew[^.;]{0,120}successive\\s+(term|period)s?",
+        "evergreen",
+        "unless\\s+(either\\s+party\\s+)?(gives|provides)\\s+(written\\s+)?notice\\s+of\\s+non[- ]?renewal",
+        "shall\\s+continue\\s+(in\\s+effect\\s+)?(from\\s+)?(year|month)\\s+to\\s+(year|month)",
+        "\\b(?:continues?|continuing|extends?|extended|renews?|renewed|rolls?\\s+over)\\b[^.;]{0,120}\\b(?:successive|consecutive|subsequent|further|additional)\\s+(?:[\\w-]+\\s+){0,2}(?:terms?|periods?)\\b",
+        "\\b(?:continues?|extends?|extended|renews?|renewed|rolls?\\s+over)\\s+automatically",
+        "\\bautomatically\\s+(?:be\\s+)?(?:continues?|continued|extends?|extended|renews?|renewed|rolls?\\s+over)\\b",
+        "unless[^.;]{0,120}notice\\s+of\\s+(?:non[- ]?renewal|termination|cancell?ation)",
+        "unless[^.;]{0,80}\\bcancell?ed\\s+in\\s+writing",
+        "\\brolls?\\s+over\\b[^.;]{0,60}\\b(?:term|period|year)"
+      ],
+      "mitigators": [
+        "may\\s+cancel\\s+at\\s+any\\s+time",
+        "reminder\\s+notice",
+        "either\\s+party\\s+may\\s+terminate[^.;]{0,120}(30|thirty)\\s+days",
+        "opt[- ]?in\\s+to\\s+renew"
+      ],
+      "mitigator_delta": -15,
+      "aggravators": [
+        {
+          "pattern": "(60|sixty|90|ninety|120|one\\s+hundred\\s+twenty)\\s+days\\s+(prior\\s+)?(written\\s+)?notice[^.;]{0,120}renew",
+          "delta": 8,
+          "reason": "Long advance notice window before renewal is easy to miss"
+        },
+        {
+          "pattern": "renew[^.;]{0,120}(price|fee|rate)s?\\s+(then\\s+in\\s+effect|current)",
+          "delta": 7,
+          "reason": "Renewal at unspecified then-current pricing"
+        },
+        {
+          "pattern": "renew[^.;]{0,120}(two|three|five|2|3|5)[- ]years?",
+          "delta": 6,
+          "reason": "Multi-year renewal term"
+        },
+        {
+          "pattern": "(?:renew|extend|continu|roll)[^.;]{0,120}then[- ]current\\s+(?:price|fee|rate|charge)s?",
+          "delta": 7,
+          "reason": "Renewal at unspecified then-current pricing"
+        }
+      ],
+      "suggested_fix": "Ask for renewal only on written confirmation, or a reminder notice 30-60 days before renewal plus a right to cancel at any time before the renewal date.",
+      "jurisdiction_note": "Many US states and the FTC have automatic-renewal disclosure and cancellation rules, mainly for consumer contracts; verify for jurisdiction.",
+      "negation_check": true
+    },
+    {
+      "id": "unilateral-change",
+      "category": "Unilateral price/fee/term changes",
+      "title": "One party may change prices, fees or terms unilaterally",
+      "group": "core",
+      "base_score": 75,
+      "why_it_matters": "The other side can raise prices or rewrite terms after you sign, so the deal you agreed to may not be the deal you get.",
+      "triggers": [
+        "(?:reserves?\\s+(?:to\\s+itself\\s+)?the\\s+(?:[a-z-]+\\s+){0,2}right|\\bmay)\\b[^.;]{0,60}?\\b(?:change|modify|amend|update|increase|adjust|raise|revise)\\b(?!\\s+(?:the\\s+|its\\s+|their\\s+|our\\s+)?(?:number|quantity|count|volume|amount\\s+of|seats?|users?|licen[sc]es?|usage|capacity|subscriptions?\\b(?!\\s+(?:charge|fee|price|pricing|rate|tariff)s?\\b))|\\s+(?:[\\w-]+\\s+){0,2}(?:seats?|users?|licen[sc]es?)\\b)[^.;]{0,120}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff|term)s?\\b",
+        "(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\s+(are\\s+)?subject\\s+to\\s+change",
+        "(posting|post)\\s+(the\\s+)?(revised|updated|amended|modified)\\s+(terms|agreement|version)",
+        "continued\\s+use[^.;]{0,120}(constitutes|deemed|shall\\s+be)\\s+(your\\s+)?accept",
+        "at\\s+(its|our)\\s+sole\\s+discretion[^.;]{0,120}(change|modify|amend|increase)",
+        "(?:sole|absolute)\\s+discretion[^.;]{0,120}\\b(?:increase|adjust|raise|change|modify|revise)\\b[^.;]{0,120}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b",
+        "\\b(?:increase|adjust|raise|change|modify|revise)\\b[^.;]{0,100}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b[^.;]{0,100}(?:sole|absolute)\\s+discretion",
+        "from\\s+time\\s+to\\s+time[^.;]{0,60}\\b(?:change|modify|amend|update|increase|adjust|raise|revise)\\b[^.;]{0,120}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b",
+        "\\b(?:price|fee|rate|charge|tariff)s?\\b[^.;]{0,80}\\bsubject\\s+to\\s+(?:change|modification|revision|adjustment|amendment|variation)\\b",
+        "\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b[^.;]{0,100}\\b(?:modif|chang|revis|adjust|amend|vari)\\w*[^.;]{0,60}\\bat\\s+(?:its|their|our)\\s+(?:sole\\s+|absolute\\s+)?discretion",
+        "\\b(?:increase|raise|adjust|change|modify|revise)\\b(?!\\s+(?:the\\s+|its\\s+|their\\s+|our\\s+)?(?:number|quantity|count|volume|amount\\s+of|seats?|users?|licen[sc]es?|usage|capacity|subscriptions?\\b(?!\\s+(?:charge|fee|price|pricing|rate|tariff)s?\\b))|\\s+(?:[\\w-]+\\s+){0,2}(?:seats?|users?|licen[sc]es?)\\b)[^.;]{0,100}\\b(?:price(?:\\s+list)?|pricing|fee|rate|charge|tariff)s?\\b[^.;]{0,100}\\bwithout\\s+(?:the\\s+|any\\s+)?(?:[\\w'’-]+\\s+){0,2}?(?:prior\\s+|further\\s+|written\\s+)?consent"
+      ],
+      "mitigators": [
+        "(mutual|both\\s+parties)\\s+(written\\s+)?(agreement|consent)",
+        "(30|thirty|60|sixty|90|ninety)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice",
+        "(cap|not\\s+(to\\s+)?exceed)[^.;]{0,120}(percent|%)",
+        "right\\s+to\\s+terminate[^.;]{0,120}(without\\s+penalty|refund)",
+        "signed\\s+by\\s+(both|each)\\s+part",
+        "\\b(?:Customer|Client|Subscriber|Licensee|Buyer)\\s+may\\s+(?:at\\s+any\\s+time\\s+)?(?:increase|reduce|decrease|add|remove|upgrade|downgrade)\\b[^.;]{0,60}\\b(?:seats?|users?|licen[sc]es?|quantit\\w+|usage|capacity)\\b"
+      ],
+      "mitigator_delta": -15,
+      "aggravators": [
+        {
+          "pattern": "without\\s+(prior\\s+)?notice",
+          "delta": 10,
+          "reason": "Changes may take effect with no notice"
+        },
+        {
+          "pattern": "(retroactive|retroactively)",
+          "delta": 8,
+          "reason": "Changes may apply retroactively"
+        },
+        {
+          "pattern": "(any|all)\\s+(other\\s+)?terms",
+          "delta": 5,
+          "reason": "Change right extends to any term, not just price"
+        }
+      ],
+      "suggested_fix": "Require written notice at least 30-60 days ahead, a cap on increases (e.g. CPI or a fixed percent per year), and a right to terminate without penalty if you reject the change.",
+      "negation_check": true
+    },
+    {
+      "id": "broad-indemnification",
+      "category": "Broad indemnification",
+      "title": "Broad or one-sided indemnification",
+      "group": "core",
+      "base_score": 78,
+      "why_it_matters": "You may have to pay the other side's losses, legal costs and third-party claims, possibly even ones caused by their own conduct.",
+      "triggers": [
+        "(indemnify|indemnification)[^.;]{0,120}(defend|hold\\s+harmless)",
+        "hold\\s+(?:[\\w'’.-]+\\s+){0,7}?harmless",
+        "(?:(?:indemnif\\w*|hold\\w*\\s+(?:[\\w'’.-]+\\s+){0,7}?harmless|defend\\w*|assum\\w+\\s+(?:all\\s+|any\\s+|full\\s+)?(?:liabilit\\w+|risks?)|reimburs\\w+)[^.;]{0,160}\\b(?:any\\s+and\\s+all|all|every)\\s+(?:claims|losses|liabilities|damages)\\b|\\b(?:any\\s+and\\s+all|all|every)\\s+(?:claims|losses|liabilities|damages)\\b[^.;]{0,160}(?:indemnif\\w*|hold\\w*\\s+(?:[\\w'’.-]+\\s+){0,7}?harmless|defend\\w*|assum\\w+\\s+(?:all\\s+|any\\s+|full\\s+)?(?:liabilit\\w+|risks?)|reimburs\\w+))",
+        "indemnif[^.;]{0,120}(arising\\s+out\\s+of|relating\\s+to|in\\s+connection\\s+with)",
+        "indemnif[^.;]{0,120}(regardless\\s+of|whether\\s+or\\s+not\\s+caused\\s+by|including)\\s+(its|their|the\\s+indemnified)\\s+(own\\s+)?negligence",
+        "\\bindemnif\\w*[^.;]{0,80}\\b(?:against|from|for)\\b[^.;]{0,60}\\b(?:any\\s+and\\s+all|all|any|every)\\s+(?:loss|losses|injur\\w+|damages?|claims?|liabilit\\w+|costs?|expenses?)\\b",
+        "\\bassum\\w+\\s+(?:all|any\\s+and\\s+all|full)\\s+(?:risks?|liabilit\\w+)\\b",
+        "\\bindemnif\\w*[^.;]{0,160}\\b(?:howsoever|however)\\s+(?:caused|arising)",
+        "\\b(?:every|all|any)\\s+(?:claims?|costs?|expenses?|liabilit\\w+|losses?)\\b[^.;]{0,80}\\bwhatsoever\\b[^.;]{0,120}\\b(?:sole|own)\\s+negligence"
+      ],
+      "mitigators": [
+        "mutual(ly)?\\s+indemnif",
+        "each\\s+party\\s+(shall|will)\\s+indemnify",
+        "to\\s+the\\s+extent\\s+caused\\s+by",
+        "(except|excluding)[^.;]{0,120}(gross\\s+)?negligence\\s+or\\s+(willful|wilful)\\s+misconduct",
+        "(subject\\s+to|limited\\s+by)\\s+(the\\s+)?(limitation\\s+of\\s+liability|cap)"
+      ],
+      "mitigator_delta": -15,
+      "aggravators": [
+        {
+          "pattern": "(own|sole)\\s+negligence",
+          "delta": 12,
+          "reason": "Covers the other party's own negligence"
+        },
+        {
+          "pattern": "(first[- ]party|direct)\\s+claims",
+          "delta": 6,
+          "reason": "Extends beyond third-party claims"
+        },
+        {
+          "pattern": "(uncapped|without\\s+limit|unlimited)",
+          "delta": 8,
+          "reason": "No cap on indemnity exposure"
+        },
+        {
+          "pattern": "\\bwhatsoever\\b",
+          "delta": 4,
+          "reason": "Indemnity extends to liabilities of every kind"
+        },
+        {
+          "pattern": "\\b(?:howsoever|however)\\s+(?:caused|arising)",
+          "delta": 8,
+          "reason": "Indemnity applies regardless of cause"
+        },
+        {
+          "pattern": "\\bof\\s+any\\s+(?:nature|kind)\\b",
+          "delta": 3,
+          "reason": "Very broad scope language"
+        },
+        {
+          "pattern": "\\b(?:resulting|arising)\\s+from\\s+[^.;]{0,40}(?:sole\\s+|own\\s+)negligence",
+          "delta": 4,
+          "reason": "Covers the indemnitee's own fault"
+        }
+      ],
+      "suggested_fix": "Make indemnities mutual, limited to third-party claims caused by the indemnifying party's breach or negligence, and subject to the liability cap.",
+      "jurisdiction_note": "Anti-indemnity statutes in some states limit indemnity for the indemnitee's own negligence (often in construction); verify for jurisdiction."
+    },
+    {
+      "id": "non-compete-restrictive-covenant",
+      "category": "Non-compete / non-solicit / exclusivity",
+      "title": "Non-compete, non-solicitation or exclusivity restriction",
+      "group": "core",
+      "base_score": 70,
+      "why_it_matters": "You may be barred from working with competitors, hiring people or serving customers for a period after the contract ends.",
+      "triggers": [
+        "non[- ]?compet",
+        "shall\\s+not,?\\s+(directly\\s+or\\s+indirectly,?\\s+)?(compete|engage\\s+in)",
+        "non[- ]?solicit",
+        "(shall|will)\\s+not,?[^.;]{0,120}solicit",
+        "exclusiv(e|ity)\\s+(provider|supplier|dealer|arrangement|basis)",
+        "(restricted|restrictive)\\s+(period|covenant)",
+        "(agrees?|covenants?)\\s+not\\s+to,?\\s+(directly\\s+or\\s+indirectly,?\\s+)?(compete|solicit)",
+        "\\bnot\\s+(?:to\\s+)?(?:[^.;]{0,40}?)(?:provide\\s+(?:any\\s+)?(?:services|assistance)\\s+to|work\\s+for|be\\s+(?:employed|engaged|retained)\\s+by|render\\s+services\\s+to|perform\\s+services\\s+for|consult\\s+for)[^.;]{0,80}\\bcompetit",
+        "(?:restricted|prohibited|barred|precluded)\\s+from\\s+(?:directly\\s+or\\s+indirectly\\s+)?(?:competing|working\\s+for|providing\\s+services\\s+to|being\\s+employed)",
+        "compet[^.;]{0,120}(?:radius|territory|miles)[^.;]{0,120}\\b(?:months?|years?)\\b",
+        "\\b(?:months?|years?)\\b[^.;]{0,120}compet[^.;]{0,120}(?:radius|territory|miles)",
+        "(?:radius|territory|miles)[^.;]{0,120}compet[^.;]{0,120}\\b(?:months?|years?)\\b",
+        "\\bnot\\s+(?:to\\s+)?(?:own|operate|open|start|engage\\s+in)\\s+(?:a\\s+|any\\s+)?(?:competing|similar)\\s+business",
+        "\\b(?:refrain|abstain|desist)\\w*\\s+from\\s+(?:[\\w-]+\\s+){0,3}?(?:working|engaging|acting|competing|being\\s+employed|providing|performing|operating|serving)\\b[^.;]{0,100}\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b",
+        "\\b(?:following|after|upon|post)[- ]?(?:the\\s+)?(?:separation|termination|cessation|departure|resignation)\\b[^.;]{0,160}\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b[^.;]{0,160}\\b(?:months?|years?)\\b",
+        "\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b[^.;]{0,120}\\b(?:for\\s+a\\s+period\\s+of|period\\s+of)\\s+[^.;]{0,40}\\b(?:months?|years?)\\b[^.;]{0,100}\\b(?:area|region|state|territory|radius|miles)\\b",
+        "\\bnot\\b[^.;]{0,80}?\\b(?:work|be\\s+employed|provide\\s+services|engage)\\b[^.;]{0,60}?\\b(?:for|with|in)\\b[^.;]{0,80}?\\bcompet(?:e|es|ed|ing|itor|itors|itive|ition)\\b",
+        "\\bcompeting\\s+with\\s+the\\s+(?:Company|Employer|Client)\\b"
+      ],
+      "mitigators": [
+        "\\b(6|six)\\s+months",
+        "limited\\s+to[^.;]{0,120}(geograph|territory|customers\\s+with\\s+whom)",
+        "mutual\\s+non[- ]?solicit",
+        "(general|public)\\s+(solicitation|advertis)[^.;]{0,120}(shall\\s+not|does\\s+not|not\\s+be)"
+      ],
+      "mitigator_delta": -10,
+      "aggravators": [
+        {
+          "pattern": "(two|three|five|2|3|5)\\s*\\(?\\d?\\)?\\s*years",
+          "delta": 8,
+          "reason": "Long restriction period"
+        },
+        {
+          "pattern": "(worldwide|anywhere\\s+in\\s+the\\s+world|any\\s+geographic)",
+          "delta": 10,
+          "reason": "Unlimited geography"
+        },
+        {
+          "pattern": "(liquidated\\s+damages|injunct)",
+          "delta": 5,
+          "reason": "Paired with liquidated damages or injunction remedy"
+        }
+      ],
+      "suggested_fix": "Narrow the restriction to a short period, a defined territory and the specific business or customers actually involved, and prefer a non-solicit over a full non-compete.",
+      "jurisdiction_note": "Non-competes are void or limited in some US states (e.g. California) and restricted in others; the enforceability landscape changes. General caution only; verify for jurisdiction.",
+      "negation_check": true
+    },
+    {
+      "id": "jury-waiver-arbitration",
+      "category": "Waived jury rights / arbitration / class waiver",
+      "title": "Jury trial waiver, mandatory arbitration or class-action waiver",
+      "group": "core",
+      "base_score": 70,
+      "why_it_matters": "You may give up the right to a jury, to go to court, or to join a group claim, and arbitration can limit discovery and appeal.",
+      "triggers": [
+        "waive[^.;]{0,120}(right\\s+to\\s+(a\\s+)?)?(trial\\s+by\\s+)?jury",
+        "jury\\s+trial\\s+waiver",
+        "(binding|mandatory|final)\\s+(?:[a-z]+\\s+){0,2}arbitration",
+        "(shall|must|will)\\s+be\\s+(finally\\s+)?(resolved|settled)\\s+(exclusively\\s+)?by\\s+arbitration",
+        "class[- ]action\\s+waiver",
+        "(waive|not\\s+(participate|bring))[^.;]{0,120}class\\s+(action|arbitration|or\\s+representative)",
+        "(?:give|gives|giving)\\s+up[^.;]{0,60}\\bright[^.;]{0,80}\\b(?:jury|class|court)",
+        "(?:surrender|surrenders|surrendered|forgo|forgoes|forego|relinquish|relinquishes|relinquished|renounce|renounces)\\b[^.;]{0,60}\\b(?:rights?|entitlements?)[^.;]{0,80}\\b(?:jury|class)",
+        "waiver\\s+of[^.;]{0,40}\\b(?:jury|class)",
+        "(?:participate|join|bring)[^.;]{0,60}class\\s+action",
+        "knowingly[^.;]{0,40}voluntarily[^.;]{0,40}waive",
+        "\\b(?:surrender|forgo|forego|relinquish|renounce|waive|give\\s+up)\\w*\\b[^.;]{0,100}\\b(?:decided|determined|tried|heard|resolved)\\s+by\\s+(?:a\\s+|an\\s+)?(?:jury|judge\\s+or\\s+jury)",
+        "\\b(?:decided|determined|resolved|settled|heard|adjudicated)\\s+(?:finally\\s+)?(?:exclusively\\s+)?by\\s+(?:a\\s+|an\\s+|the\\s+)?(?:single|sole|one|neutral|independent)\\s+arbitrators?\\b"
+      ],
+      "mitigators": [
+        "opt[- ]?out[^.;]{0,120}arbitration",
+        "small\\s+claims\\s+court",
+        "(mutual|either\\s+party)\\s+(may\\s+)?elect",
+        "(company|we)\\s+(will\\s+)?(pay|bear)[^.;]{0,120}arbitration\\s+(fees|costs)"
+      ],
+      "mitigator_delta": -10,
+      "aggravators": [
+        {
+          "pattern": "(confidential|secret)\\s+arbitration",
+          "delta": 4,
+          "reason": "Confidential proceedings"
+        },
+        {
+          "pattern": "(each\\s+party|you)\\s+(shall\\s+)?(bear|pay)[^.;]{0,120}(arbitrat|filing)\\s+(fee|cost)",
+          "delta": 6,
+          "reason": "User bears arbitration costs"
+        },
+        {
+          "pattern": "(shorten|within\\s+(one|1|six|6)\\s+(year|month))[^.;]{0,120}(claim|action)",
+          "delta": 6,
+          "reason": "Shortened limitations period"
+        }
+      ],
+      "suggested_fix": "Ask for a mutual, opt-out-able arbitration clause with costs borne by the drafting party and a small-claims carve-out, or remove the jury and class waivers.",
+      "jurisdiction_note": "Enforceability of pre-dispute jury waivers, arbitration and class waivers varies by jurisdiction and claim type (e.g. some employment and consumer claims); verify for jurisdiction.",
+      "negation_check": true,
+      "ignore_modifiers": [
+        "mutual"
+      ]
+    },
+    {
+      "id": "one-sided-liability-limit",
+      "category": "Limitation of liability",
+      "title": "One-sided or uncapped liability",
+      "group": "extra",
+      "base_score": 65,
+      "why_it_matters": "Your liability may be unlimited while the other side's is capped low or excluded, shifting most risk to you.",
+      "triggers": [
+        "limitation\\s+of\\s+liability",
+        "in\\s+no\\s+event\\s+shall[^.;]{0,120}(be\\s+)?liable",
+        "(aggregate|total)\\s+liability[^.;]{0,120}(shall\\s+not|not\\s+to)\\s+exceed",
+        "(disclaim|exclude)s?[^.;]{0,120}(consequential|indirect|incidental|special)",
+        "(unlimited|uncapped)\\s+liability"
+      ],
+      "mitigators": [
+        "(neither|each)\\s+party",
+        "mutual",
+        "(except|excluding)[^.;]{0,120}(gross\\s+negligence|willful|wilful|fraud)"
+      ],
+      "mitigator_delta": -12,
+      "aggravators": [
+        {
+          "pattern": "exceed[^.;]{0,120}(fees\\s+paid\\s+in\\s+the\\s+(prior|preceding)\\s+(one|1|three|3)\\s+months?|\\$\\s?(1|10|50|100)\\b)",
+          "delta": 10,
+          "reason": "Very low cap for the other side"
+        },
+        {
+          "pattern": "(customer|client|you)\\s+(shall\\s+be|is|are)\\s+(fully|solely)\\s+liable",
+          "delta": 10,
+          "reason": "Your liability stated as full or sole"
+        }
+      ],
+      "suggested_fix": "Make the cap and exclusions mutual, set the cap at a meaningful multiple of fees, and carve out confidentiality, data breach and indemnity as appropriate."
+    },
+    {
+      "id": "unilateral-termination-convenience",
+      "category": "Termination",
+      "title": "Unilateral termination for convenience",
+      "group": "extra",
+      "base_score": 55,
+      "why_it_matters": "The other side can end the deal at any time for any reason while you remain bound, possibly without refund.",
+      "triggers": [
+        "terminat[^.;]{0,120}for\\s+convenience",
+        "terminat[^.;]{0,120}(at\\s+any\\s+time|for\\s+any\\s+reason|for\\s+no\\s+reason)",
+        "(sole|absolute)\\s+discretion[^.;]{0,120}terminat",
+        "terminat[^.;]{0,120}without\\s+cause"
+      ],
+      "mitigators": [
+        "either\\s+party\\s+may\\s+terminat",
+        "(pro[- ]?rata|prorated)\\s+refund",
+        "(30|thirty|60|sixty|90|ninety)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice"
+      ],
+      "mitigator_delta": -15,
+      "aggravators": [
+        {
+          "pattern": "terminat[^.;]{0,120}(immediately|without\\s+notice)",
+          "delta": 10,
+          "reason": "Immediate termination without notice"
+        },
+        {
+          "pattern": "(no|without)\\s+(refund|liability)[^.;]{0,120}terminat|terminat[^.;]{0,120}(no|without)\\s+(refund|liability)",
+          "delta": 8,
+          "reason": "No refund or liability on termination"
+        }
+      ],
+      "suggested_fix": "Make termination for convenience mutual with 30+ days' written notice and a pro-rata refund of prepaid fees.",
+      "negation_check": true
+    },
+    {
+      "id": "ip-assignment-overreach",
+      "category": "Intellectual property",
+      "title": "Overbroad IP assignment or license grab",
+      "group": "extra",
+      "base_score": 62,
+      "why_it_matters": "You may hand over ownership of work, pre-existing materials or future ideas beyond what the deal actually covers.",
+      "triggers": [
+        "(hereby\\s+)?(assigns?|transfers?)[^.;]{0,120}(all\\s+)?(right,?\\s+title\\s+and\\s+interest|intellectual\\s+property)",
+        "work\\s+made\\s+for\\s+hire",
+        "(perpetual|irrevocable)[^.;]{0,120}(royalty[- ]free|worldwide)[^.;]{0,120}licen[cs]e",
+        "(pre[- ]?existing|background)\\s+(ip|intellectual\\s+property|materials)[^.;]{0,120}(assign|licen[cs]e)",
+        "(ideas|inventions|improvements)[^.;]{0,120}(conceived|developed)"
+      ],
+      "mitigators": [
+        "(excluding|except|other\\s+than)[^.;]{0,120}(pre[- ]?existing|background)",
+        "(solely|only)[^.;]{0,120}(deliverables|for\\s+the\\s+purpose)",
+        "upon\\s+(full\\s+)?payment",
+        "retain(s)?\\s+(all\\s+)?(ownership|title)"
+      ],
+      "mitigator_delta": -12,
+      "aggravators": [
+        {
+          "pattern": "(whether\\s+or\\s+not|regardless\\s+of\\s+whether)[^.;]{0,120}(during|working\\s+hours|using)",
+          "delta": 8,
+          "reason": "Reaches work outside the engagement"
+        },
+        {
+          "pattern": "moral\\s+rights[^.;]{0,120}waive",
+          "delta": 4,
+          "reason": "Moral rights waiver"
+        }
+      ],
+      "suggested_fix": "Limit assignment to paid-for deliverables, expressly exclude pre-existing and general know-how, and condition transfer on full payment.",
+      "jurisdiction_note": "Some states limit employee invention assignment for inventions made on own time (e.g. California Labor Code 2870); verify for jurisdiction."
+    },
+    {
+      "id": "confidentiality-one-way-perpetual",
+      "category": "Confidentiality",
+      "title": "One-way or perpetual confidentiality",
+      "group": "extra",
+      "base_score": 45,
+      "why_it_matters": "Only you may be bound to secrecy, possibly forever, while the other side can use your information freely.",
+      "triggers": [
+        "(confidential|confidentiality)[^.;]{0,120}(perpetual|in\\s+perpetuity|indefinitely|survive\\s+indefinitely)",
+        "(recipient|you|customer|client)\\s+(shall|will|agrees\\s+to)\\s+(keep|hold|maintain)[^.;]{0,120}confiden",
+        "(non[- ]?disclosure|confidentiality)\\s+obligations?\\s+shall\\s+survive",
+        "(no|without)\\s+(time\\s+)?limit[^.;]{0,120}confiden"
+      ],
+      "mitigators": [
+        "mutual",
+        "each\\s+party",
+        "(two|three|five|2|3|5)\\s*\\(?\\d?\\)?\\s*years",
+        "(publicly\\s+available|independently\\s+developed|already\\s+known)",
+        "trade\\s+secrets?[^.;]{0,120}(so\\s+long\\s+as|for\\s+as\\s+long)"
+      ],
+      "mitigator_delta": -10,
+      "aggravators": [
+        {
+          "pattern": "(company|provider|we)\\s+may\\s+(use|disclose)[^.;]{0,120}(your|customer|client)\\s+(information|data)",
+          "delta": 8,
+          "reason": "Other party may use your confidential info"
+        }
+      ],
+      "suggested_fix": "Make the obligations mutual, include standard exclusions, and limit the term to a fixed number of years except for trade secrets."
+    },
+    {
+      "id": "distant-governing-law-venue",
+      "category": "Governing law / venue",
+      "title": "Governing law or exclusive venue far from you",
+      "group": "extra",
+      "base_score": 40,
+      "why_it_matters": "Disputes may have to be brought under unfamiliar law in a distant court, raising cost and practical difficulty.",
+      "triggers": [
+        "governed\\s+by[^.;]{0,120}laws?\\s+of",
+        "exclusive\\s+(jurisdiction|venue)",
+        "(submit|consent)s?\\s+to[^.;]{0,120}(personal\\s+)?jurisdiction",
+        "(venue|forum)[^.;]{0,120}(shall\\s+be|lie)\\s+(exclusively\\s+)?in",
+        "waives?[^.;]{0,120}(forum\\s+non\\s+conveniens|objection\\s+to\\s+venue)"
+      ],
+      "mitigators": [
+        "(defendant['’]?s|your)\\s+(home\\s+)?(state|county|domicile)",
+        "non[- ]?exclusive\\s+jurisdiction",
+        "(remote|video|virtual)\\s+(hearing|appearance)"
+      ],
+      "mitigator_delta": -10,
+      "aggravators": [
+        {
+          "pattern": "(outside\\s+the\\s+united\\s+states|england|singapore|hong\\s+kong|cayman)",
+          "delta": 6,
+          "reason": "Foreign law or venue"
+        }
+      ],
+      "suggested_fix": "Propose your home state's law and courts, non-exclusive jurisdiction, or the defendant's home forum.",
+      "jurisdiction_note": "Some states restrict out-of-state forum or choice-of-law clauses for certain contract types (e.g. franchise, employment, consumer); verify for jurisdiction."
+    },
+    {
+      "id": "one-way-fee-shifting",
+      "category": "Attorney fees",
+      "title": "One-way or automatic attorney fee shifting",
+      "group": "extra",
+      "base_score": 50,
+      "why_it_matters": "You may have to pay the other side's lawyers even in disputes they start or partly lose.",
+      "triggers": [
+        "(attorneys?['’]?|legal)\\s+fees[^.;]{0,120}(shall\\s+be\\s+)?(borne|paid|reimbursed)\\s+by",
+        "(you|customer|client)\\s+(shall|will|agrees\\s+to)\\s+(pay|reimburse)[^.;]{0,120}(attorneys?['’]?|legal|collection)\\s+(fees|costs)",
+        "costs\\s+of\\s+collection",
+        "(regardless|irrespective)\\s+of\\s+(the\\s+)?outcome[^.;]{0,120}fees"
+      ],
+      "mitigators": [
+        "prevailing\\s+party",
+        "each\\s+party\\s+(shall\\s+)?bear\\s+its\\s+own",
+        "reasonable\\s+attorneys?['’]?\\s+fees"
+      ],
+      "mitigator_delta": -12,
+      "aggravators": [
+        {
+          "pattern": "(regardless|irrespective)\\s+of\\s+(the\\s+)?outcome",
+          "delta": 10,
+          "reason": "Fees owed regardless of who wins"
+        },
+        {
+          "pattern": "(collection\\s+agency|percent|%)[^.;]{0,120}(collection|fees)",
+          "delta": 4,
+          "reason": "Percentage-based collection fees"
+        }
+      ],
+      "suggested_fix": "Replace with a mutual prevailing-party clause limited to reasonable fees, or each party bears its own costs.",
+      "jurisdiction_note": "Some states make one-way fee clauses reciprocal by statute (e.g. California Civil Code 1717); verify for jurisdiction."
+    },
+    {
+      "id": "late-fees-liquidated-damages",
+      "category": "Penalties",
+      "title": "Late-payment penalties, interest or liquidated damages",
+      "group": "extra",
+      "base_score": 45,
+      "why_it_matters": "Small delays or breaches may trigger fixed charges or high interest that exceed the real harm.",
+      "triggers": [
+        "late\\s+(payment\\s+)?(fee|charge|penalt)",
+        "interest[^.;]{0,120}(per\\s+month|per\\s+annum|monthly)",
+        "liquidated\\s+damages",
+        "(early\\s+)?termination\\s+(fee|charge|penalty)",
+        "(1\\.5|2|3|5)\\s*%\\s+(per\\s+month|monthly)"
+      ],
+      "mitigators": [
+        "(maximum|highest)\\s+(rate\\s+)?(permitted|allowed)\\s+by\\s+(applicable\\s+)?law",
+        "grace\\s+period",
+        "reasonable\\s+(estimate|pre[- ]?estimate)"
+      ],
+      "mitigator_delta": -8,
+      "aggravators": [
+        {
+          "pattern": "(remaining|all\\s+remaining|balance\\s+of)[^.;]{0,120}(fees|payments)[^.;]{0,120}(due|accelerat|immediately)",
+          "delta": 10,
+          "reason": "Acceleration of all remaining payments"
+        },
+        {
+          "pattern": "(1\\.5|2|3|5)\\s*%\\s+(per\\s+month|monthly)",
+          "delta": 5,
+          "reason": "High monthly interest rate"
+        }
+      ],
+      "suggested_fix": "Ask for a 10-30 day grace period, interest capped at a modest or statutory rate, and liquidated damages tied to a reasonable estimate of actual loss.",
+      "jurisdiction_note": "Usury limits and penalty-clause rules vary; liquidated damages deemed penalties may be unenforceable in some jurisdictions; verify for jurisdiction."
+    },
+    {
+      "id": "data-use-sale-rights",
+      "category": "Data rights",
+      "title": "Broad rights to use, share or sell your data",
+      "group": "extra",
+      "base_score": 60,
+      "why_it_matters": "Your or your customers' data may be used for other purposes, shared or sold, creating privacy and compliance exposure.",
+      "triggers": [
+        "(sell|sale\\s+of|monetiz)[^.;]{0,120}(data|information)",
+        "(use|share|disclose)[^.;]{0,120}(data|information)[^.;]{0,120}(any\\s+purpose|third\\s+part(y|ies)|affiliates|partners)",
+        "(perpetual|irrevocable)[^.;]{0,120}(licen[cs]e|right)[^.;]{0,120}(data|content)",
+        "(aggregate|anonymi[sz]ed|de[- ]?identified)\\s+data[^.;]{0,120}(any\\s+purpose|commercial)",
+        "train[^.;]{0,120}(model|machine\\s+learning|artificial\\s+intelligence|ai)"
+      ],
+      "mitigators": [
+        "(solely|only)\\s+to\\s+(provide|perform)\\s+the\\s+services",
+        "data\\s+processing\\s+(agreement|addendum)",
+        "(will\\s+not|shall\\s+not|never)\\s+sell",
+        "(delete|return)[^.;]{0,120}(upon|after)\\s+(termination|expiration)"
+      ],
+      "mitigator_delta": -15,
+      "aggravators": [
+        {
+          "pattern": "(personal|health|biometric|financial)\\s+(data|information)",
+          "delta": 8,
+          "reason": "Sensitive data categories involved"
+        }
+      ],
+      "suggested_fix": "Restrict use to providing the services, prohibit sale and model training without opt-in consent, and require deletion or return on termination.",
+      "jurisdiction_note": "Privacy laws (e.g. GDPR, CCPA/CPRA, HIPAA, state biometric laws) may impose separate requirements; verify for jurisdiction.",
+      "negation_check": true
+    },
+    {
+      "id": "personal-guarantee",
+      "category": "Personal guarantee",
+      "title": "Personal guarantee of business obligations",
+      "group": "extra",
+      "base_score": 80,
+      "why_it_matters": "An individual, not just the company, may be personally on the hook for the business's debts under the contract.",
+      "triggers": [
+        "personal(ly)?\\s+guarant",
+        "(unconditionally|irrevocably)\\s+guarant",
+        "guarantor",
+        "jointly\\s+and\\s+severally\\s+liable",
+        "(individual|personal)\\s+capacity[^.;]{0,120}(liable|guarant)"
+      ],
+      "mitigators": [
+        "(limited|capped)\\s+(to|at)[^.;]{0,120}(\\$|amount|months)",
+        "(terminat|expire|release)s?[^.;]{0,120}guarant[^.;]{0,120}(after|upon)",
+        "burn[- ]?off"
+      ],
+      "mitigator_delta": -12,
+      "aggravators": [
+        {
+          "pattern": "waive[^.;]{0,120}(notice|demand|presentment|defen[cs]es|suretyship)",
+          "delta": 8,
+          "reason": "Guarantor waives standard defenses"
+        },
+        {
+          "pattern": "continuing\\s+guarant",
+          "delta": 6,
+          "reason": "Continuing guarantee covering future obligations"
+        }
+      ],
+      "suggested_fix": "Remove the guarantee, or cap it at a fixed amount and duration with release after a period of timely performance.",
+      "jurisdiction_note": "Spousal-signature, community-property and consumer-protection rules may affect guarantees; verify for jurisdiction.",
+      "negation_check": true
+    },
+    {
+      "id": "eng-non-refundable-fees",
+      "category": "Engagement: fees",
+      "title": "Non-refundable or earned-on-receipt retainer",
+      "group": "engagement",
+      "base_score": 72,
+      "why_it_matters": "Fees may be kept even if little or no work is done or the engagement ends early.",
+      "triggers": [
+        "non[- ]?refundable",
+        "(earned|deemed\\s+earned)\\s+(up)?on\\s+receipt",
+        "no\\s+refunds?",
+        "(fees|retainer)[^.;]{0,120}(shall\\s+not|will\\s+not)\\s+be\\s+refunded",
+        "flat\\s+fee[^.;]{0,120}(earned|non[- ]?refundable)"
+      ],
+      "mitigators": [
+        "(refund|return)[^.;]{0,120}unearned",
+        "trust\\s+(account|iolta)",
+        "(milestone|stage)s?[^.;]{0,120}earned",
+        "(pro[- ]?rata|prorated)\\s+refund"
+      ],
+      "mitigator_delta": -15,
+      "aggravators": [
+        {
+          "pattern": "(regardless\\s+of|irrespective\\s+of|even\\s+if)[^.;]{0,120}(outcome|denial|approval|withdraw|terminat)",
+          "delta": 8,
+          "reason": "Kept regardless of outcome or termination"
+        }
+      ],
+      "suggested_fix": "Ask that unearned fees be refundable, held in trust until earned, and that fees be earned by defined milestones.",
+      "jurisdiction_note": "Many bar rules restrict truly non-refundable legal fees and require refund of unearned amounts; verify for jurisdiction.",
+      "negation_check": true
+    },
+    {
+      "id": "eng-fee-change-without-consent",
+      "category": "Engagement: fees",
+      "title": "Fee changes without client consent",
+      "group": "engagement",
+      "base_score": 65,
+      "why_it_matters": "The firm may raise rates or add charges mid-matter without your written agreement.",
+      "triggers": [
+        "(hourly\\s+)?rates?[^.;]{0,120}(subject\\s+to\\s+change|may\\s+(be\\s+)?(change|increase|adjust))",
+        "(firm|we)\\s+(reserves?|may)[^.;]{0,120}(revise|increase|adjust)[^.;]{0,120}(fee|rate)s?",
+        "additional\\s+(fees|charges)[^.;]{0,120}(as\\s+(determined|deemed)|in\\s+(its|our)\\s+discretion)",
+        "(annual|periodic)\\s+(rate\\s+)?(increase|adjustment)"
+      ],
+      "mitigators": [
+        "(written\\s+)?consent\\s+of\\s+(the\\s+)?client",
+        "(30|thirty|60|sixty)\\s+days['’]?\\s+(prior\\s+)?(written\\s+)?notice",
+        "signed\\s+by\\s+(both|the\\s+client)"
+      ],
+      "mitigator_delta": -15,
+      "aggravators": [
+        {
+          "pattern": "without\\s+(prior\\s+)?(notice|consent)",
+          "delta": 10,
+          "reason": "No notice or consent required"
+        }
+      ],
+      "suggested_fix": "Require written client consent for any fee or rate change, with advance notice and a right to end the engagement before new rates apply.",
+      "negation_check": true
+    },
+    {
+      "id": "eng-waiver-client-rights",
+      "category": "Engagement: client rights",
+      "title": "Waiver of client rights or firm liability",
+      "group": "engagement",
+      "base_score": 70,
+      "why_it_matters": "You may give up rights such as suing for malpractice, getting your file, or holding the firm to its duties.",
+      "triggers": [
+        "(client\\s+)?(waives?|releases?)[^.;]{0,120}(claims?|rights?|malpractice)",
+        "(firm|we)\\s+(shall\\s+not\\s+be|is\\s+not|are\\s+not)\\s+(liable|responsible)[^.;]{0,120}(outcome|denial|delay|decision)",
+        "(limit|cap)s?[^.;]{0,120}(firm['’]?s|our)\\s+liability",
+        "(retain|withhold|keep)[^.;]{0,120}(client\\s+)?file[^.;]{0,120}(until|unless)\\s+(paid|payment)"
+      ],
+      "mitigators": [
+        "independent\\s+(legal\\s+)?(counsel|advice)",
+        "(no\\s+guarantee|cannot\\s+guarantee)[^.;]{0,120}outcome",
+        "nothing\\s+in\\s+this\\s+agreement[^.;]{0,120}(limit|waive)"
+      ],
+      "mitigator_delta": -10,
+      "aggravators": [
+        {
+          "pattern": "malpractice",
+          "delta": 10,
+          "reason": "Prospective malpractice limitation"
+        }
+      ],
+      "suggested_fix": "Strike prospective waivers of malpractice claims and file-retention conditions; keep only a plain statement that no outcome is guaranteed.",
+      "jurisdiction_note": "Professional conduct rules often bar prospectively limiting malpractice liability unless the client is independently represented (e.g. ABA Model Rule 1.8(h)); verify for jurisdiction.",
+      "negation_check": true
+    },
+    {
+      "id": "eng-unclear-scope",
+      "category": "Engagement: scope",
+      "title": "Unclear or open-ended scope of services",
+      "group": "engagement",
+      "base_score": 50,
+      "why_it_matters": "If the services are vague you may be charged extra for work you assumed was included, or the firm may treat key steps as out of scope.",
+      "triggers": [
+        "(services|work)\\s+(may\\s+)?(include|including)\\s+(but\\s+(are\\s+)?not\\s+limited\\s+to|such\\s+other)",
+        "(any\\s+)?(other|additional)\\s+(services|matters)\\s+as\\s+(may\\s+be\\s+)?(necessary|required|requested|appropriate)",
+        "(outside|beyond|not\\s+within)\\s+(the\\s+)?scope[^.;]{0,120}(additional|separate)\\s+(fee|charge|engagement)",
+        "(rfe|request\\s+for\\s+evidence|noid|appeal|motion)[^.;]{0,120}(additional|separate)\\s+(fee|charge)"
+      ],
+      "mitigators": [
+        "scope\\s+of\\s+(services|representation|engagement)\\s*(is|shall\\s+be)?\\s*(limited\\s+to|as\\s+follows|:)",
+        "(exhibit|schedule|appendix)\\s+[a-z0-9]+[^.;]{0,120}scope",
+        "(includes|included)\\s*:"
+      ],
+      "mitigator_delta": -12,
+      "aggravators": [],
+      "suggested_fix": "List the specific services, filings and stages included, those excluded, and the fixed or estimated fee for common add-ons such as RFE responses or appeals."
+    },
+    {
+      "id": "eng-mandatory-arbitration",
+      "category": "Engagement: disputes",
+      "title": "Mandatory arbitration of fee or malpractice disputes",
+      "group": "engagement",
+      "base_score": 65,
+      "why_it_matters": "Disputes with the firm, including over fees or quality of work, may be forced into private arbitration.",
+      "triggers": [
+        "(fee\\s+)?disputes?[^.;]{0,120}(binding\\s+)?arbitration",
+        "(malpractice|professional\\s+negligence)[^.;]{0,120}arbitrat",
+        "(binding|mandatory)\\s+arbitration",
+        "waive[^.;]{0,120}jury"
+      ],
+      "mitigators": [
+        "(bar\\s+association|state\\s+bar)\\s+fee\\s+arbitration\\s+program",
+        "(client\\s+)?(may\\s+)?(opt\\s+out|elect|choose)[^.;]{0,120}(court|arbitrat)",
+        "(advised|informed)[^.;]{0,120}(advantages|disadvantages|independent\\s+counsel)"
+      ],
+      "mitigator_delta": -12,
+      "aggravators": [
+        {
+          "pattern": "(client|you)\\s+(shall\\s+)?(bear|pay)[^.;]{0,120}arbitrat",
+          "delta": 6,
+          "reason": "Client pays arbitration costs"
+        }
+      ],
+      "suggested_fix": "Ask that arbitration be limited to fee disputes through a bar program, be optional for the client, and come with a written explanation of what rights are given up.",
+      "jurisdiction_note": "Ethics opinions (e.g. ABA Formal Op. 02-425) and state rules may require informed client consent to arbitration in retainers; verify for jurisdiction.",
+      "negation_check": true
+    },
+    {
+      "id": "eng-third-party-fee-liability",
+      "category": "Engagement: costs",
+      "title": "Client liable for government filing and third-party fees",
+      "group": "engagement",
+      "base_score": 35,
+      "why_it_matters": "Government filing fees, translations, couriers and other third-party costs are usually extra and can change before filing.",
+      "triggers": [
+        "(filing|government|uscis|biometric)\\s+fees?[^.;]{0,120}(responsib|paid\\s+by|borne\\s+by|not\\s+included)",
+        "(costs|expenses)[^.;]{0,120}(translation|courier|postage|expert|evaluation)[^.;]{0,120}(client|you)",
+        "(client|you)\\s+(shall|will|is|are)\\s+(be\\s+)?(responsible|liable)\\s+for[^.;]{0,120}(fees|costs|expenses)"
+      ],
+      "mitigators": [
+        "(estimate|estimated)[^.;]{0,120}(fees|costs)",
+        "(advance|prior)\\s+(written\\s+)?(approval|consent)[^.;]{0,120}(cost|expense)",
+        "(not\\s+to\\s+exceed|capped\\s+at)"
+      ],
+      "mitigator_delta": -10,
+      "aggravators": [
+        {
+          "pattern": "(fee\\s+(increase|change)s?|change\\s+in\\s+(government|filing)\\s+fees)[^.;]{0,120}(client|you)",
+          "delta": 6,
+          "reason": "Client bears government fee increases"
+        },
+        {
+          "pattern": "(administrative|processing|handling)\\s+(fee|charge)[^.;]{0,120}(percent|%)",
+          "delta": 6,
+          "reason": "Firm markup on pass-through costs"
+        }
+      ],
+      "suggested_fix": "Ask for an itemized estimate of third-party costs, prior approval for expenses above a threshold, and no markup on pass-through fees."
+    }
+  ],
+  "qc_checks": [
+    {
+      "id": "qc-missing-cancellation-window",
+      "title": "No cancellation or non-renewal window found",
+      "trigger_absent": "(cancel|non[- ]?renew|terminat)[^.;]{0,120}(\\b\\d{1,4}|thirty|sixty|ninety)\\s+days|(\\b\\d{1,4}|thirty|sixty|ninety)\\s+days[^.;]{0,120}(cancel|non[- ]?renew|terminat)",
+      "severity": "Medium",
+      "message": "Could not find a stated window or deadline to cancel or prevent renewal. Ask a reviewer to confirm how and when the agreement can be ended."
+    },
+    {
+      "id": "qc-missing-notice-period",
+      "title": "No notice period found",
+      "trigger_absent": "(\\b\\d{1,4}|thirty|sixty|ninety|ten|fifteen)\\s+(business\\s+|calendar\\s+)?days['’]?\\s+(prior\\s+|advance\\s+)?(written\\s+)?notice",
+      "severity": "Medium",
+      "message": "No advance notice period was detected for changes, termination or renewal. Confirm whether notice is required before key actions."
+    },
+    {
+      "id": "qc-missing-notice-address",
+      "title": "No notice method or address found",
+      "trigger_absent": "notices?[^.;]{0,120}(shall|must|will)\\s+be\\s+(given|sent|delivered)|(address|email)\\s+for\\s+notices",
+      "severity": "Low",
+      "message": "No clause on how and where formal notices are sent was detected."
+    },
+    {
+      "id": "qc-missing-liability-cap",
+      "title": "No limitation of liability found",
+      "trigger_absent": "limitation\\s+of\\s+liability|(aggregate|total)\\s+liability|in\\s+no\\s+event\\s+shall",
+      "severity": "Medium",
+      "message": "No liability cap was detected. Exposure for either party may be unlimited; flag for reviewer."
+    },
+    {
+      "id": "qc-missing-governing-law",
+      "title": "No governing law clause found",
+      "trigger_absent": "governed\\s+by|governing\\s+law",
+      "severity": "Low",
+      "message": "No governing law clause was detected, which can make disputes less predictable."
+    },
+    {
+      "id": "qc-missing-termination",
+      "title": "No termination clause found",
+      "trigger_absent": "terminat",
+      "severity": "Medium",
+      "message": "No termination language was detected. Confirm how either party can exit the agreement."
+    },
+    {
+      "id": "qc-missing-scope",
+      "title": "No defined scope of services found",
+      "trigger_absent": "scope\\s+of\\s+(services|work|representation|engagement)|statement\\s+of\\s+work",
+      "severity": "Medium",
+      "message": "No scope section was detected. Unclear scope often leads to fee disputes."
+    },
+    {
+      "id": "qc-missing-refund-terms",
+      "title": "No refund terms found",
+      "trigger_absent": "refund",
+      "severity": "Low",
+      "message": "No refund language was detected. For retainers and prepaid fees, confirm what happens to unearned amounts."
+    },
+    {
+      "id": "qc-missing-dispute-resolution",
+      "title": "No dispute resolution clause found",
+      "trigger_absent": "dispute|arbitrat|mediat|jurisdiction|venue",
+      "severity": "Low",
+      "message": "No dispute resolution, venue or jurisdiction clause was detected."
+    }
+  ]
+}
